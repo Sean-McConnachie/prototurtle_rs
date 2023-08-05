@@ -2,7 +2,7 @@ use rocket::serde::json::Value;
 use std::fmt::Display;
 use std::io::{Seek, SeekFrom, Write};
 
-use crate::{cmd, turtle::Turt};
+use crate::cmd;
 
 pub enum Order {
     XYZ,
@@ -119,6 +119,7 @@ impl Into<Pos> for Value {
 
 #[derive(Debug, Clone)]
 pub struct Nav {
+    id: usize,
     p: Pos,
     fp: std::path::PathBuf,
 }
@@ -143,9 +144,10 @@ impl Display for Nav {
 }
 
 impl Nav {
-    pub fn new(turtleid: i32) -> Self {
+    pub fn new(turtleid: usize) -> Self {
         let fp = std::path::PathBuf::from(format!("turtle_positions/{turtleid}.turtle"));
         let s = Self {
+            id: turtleid,
             p: Pos::default(),
             fp,
         };
@@ -189,14 +191,14 @@ impl Nav {
     }
 
     pub async fn gps_init(&mut self) {
-        let p1: Pos = match cmd::COMMANDS.run("gps.locate()").await {
+        let p1: Pos = match cmd::COMMANDS[self.id].commands.run("gps.locate()").await {
             cmd::Resp::Ok(v) => v.into(),
             _ => panic!("Oh oh... no gps here."),
         };
 
-        Self::ignore_err(Turt::m_forw().await);
+        Self::ignore_err(cmd::COMMANDS[self.id].turt.m_forw().await);
 
-        self.p = match cmd::COMMANDS.run("gps.locate()").await {
+        self.p = match cmd::COMMANDS[self.id].commands.run("gps.locate()").await {
             cmd::Resp::Ok(v) => v.into(),
             _ => panic!("This is bad..."),
         };
@@ -233,7 +235,7 @@ impl Nav {
             Head::S => Head::E,
             Head::W => Head::S,
         };
-        Self::ignore_err(Turt::t_left().await);
+        Self::ignore_err(cmd::COMMANDS[self.id].turt.t_left().await);
         self.spos();
     }
 
@@ -244,21 +246,21 @@ impl Nav {
             Head::S => Head::W,
             Head::W => Head::N,
         };
-        Self::ignore_err(Turt::t_right().await);
+        Self::ignore_err(cmd::COMMANDS[self.id].turt.t_right().await);
         self.spos();
     }
 
     pub async fn m_forw(&mut self) {
         loop {
-            match Turt::i_forw().await {
+            match cmd::COMMANDS[self.id].turt.i_forw().await {
                 Ok(i) => {
                     if i.block() {
-                        Self::ignore_err(Turt::d_forw().await)
+                        Self::ignore_err(cmd::COMMANDS[self.id].turt.d_forw().await)
                     }
                 }
                 Err(_) => continue,
             }
-            match Turt::m_forw().await {
+            match cmd::COMMANDS[self.id].turt.m_forw().await {
                 Ok(m) => {
                     if m.success() {
                         break;
@@ -277,7 +279,7 @@ impl Nav {
     }
 
     pub async fn m_back(&mut self) {
-        match Turt::m_back().await {
+        match cmd::COMMANDS[self.id].turt.m_back().await {
             Ok(m) => {
                 if !m.success() {
                     return;
@@ -296,15 +298,15 @@ impl Nav {
 
     pub async fn m_up(&mut self) {
         loop {
-            match Turt::i_up().await {
+            match cmd::COMMANDS[self.id].turt.i_up().await {
                 Ok(i) => {
                     if i.block() {
-                        Self::ignore_err(Turt::d_up().await)
+                        Self::ignore_err(cmd::COMMANDS[self.id].turt.d_up().await)
                     }
                 }
                 Err(_) => continue,
             }
-            match Turt::m_up().await {
+            match cmd::COMMANDS[self.id].turt.m_up().await {
                 Ok(m) => {
                     if m.success() {
                         break;
@@ -319,15 +321,15 @@ impl Nav {
 
     pub async fn m_down(&mut self) {
         loop {
-            match Turt::i_down().await {
+            match cmd::COMMANDS[self.id].turt.i_down().await {
                 Ok(i) => {
                     if i.block() {
-                        Self::ignore_err(Turt::d_down().await)
+                        Self::ignore_err(cmd::COMMANDS[self.id].turt.d_down().await)
                     }
                 }
                 Err(_) => continue,
             }
-            match Turt::m_down().await {
+            match cmd::COMMANDS[self.id].turt.m_down().await {
                 Ok(m) => {
                     if m.success() {
                         break;

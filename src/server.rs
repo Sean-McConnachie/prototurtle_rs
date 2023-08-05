@@ -3,27 +3,29 @@ use crate::cmd;
 use rocket::serde::json::Json;
 use rocket::{get, post, routes};
 
-#[get("/")]
-async fn next() -> String {
-    let n = cmd::COMMANDS.next();
-    println!("next() -> `{n}`");
-    return n;
+#[post("/<turtleid>")]
+async fn register(turtleid: usize) {
+    cmd::COMMANDS[turtleid].commands.register();
 }
 
-#[post("/", format = "json", data = "<body>")]
-async fn cmdcomplete(body: Json<cmd::LuaResp>) {
+#[get("/<turtleid>")]
+async fn next(turtleid: usize) -> String {
+    cmd::COMMANDS[turtleid].commands.next()
+}
+
+#[post("/<turtleid>", format = "json", data = "<body>")]
+async fn cmdcomplete(turtleid: usize, body: Json<cmd::LuaResp>) {
     let lua_resp = body.into_inner();
     let resp: cmd::Resp = lua_resp.into();
-    println!("complete() -> `{:?}`", resp);
-    cmd::COMMANDS.completed(resp);
+    cmd::COMMANDS[turtleid].commands.completed(resp);
 }
 
 pub async fn run() {
     rocket::build()
+        .mount("/register", routes![register])
         .mount("/next", routes![next])
         .mount("/cmdcomplete", routes![cmdcomplete])
         .launch()
         .await
         .expect("Bye bye server...");
 }
-

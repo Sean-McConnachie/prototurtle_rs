@@ -1,4 +1,5 @@
-use once_cell::sync::Lazy;
+use crate::{turtle, nav};
+
 use rocket::serde::json::Value;
 use serde::Deserialize;
 use std::io::Write;
@@ -8,7 +9,30 @@ use std::sync::Mutex;
 const TIMEOUT_ATTEMPTS: usize = 100;
 const TIMEOUT_TIME: u64 = 100;
 
-pub static COMMANDS: Lazy<Commands> = Lazy::new(|| Commands::new());
+const MAX_TURTLES: usize = 48;
+
+pub struct Control {
+    pub id: usize,
+    pub commands: Commands,
+    pub turt: turtle::Turt,
+}
+
+impl Control {
+    pub fn new(turtleid: usize) -> Self {
+        Self {
+            id: turtleid,
+            commands: Commands::new(),
+            turt: turtle::Turt::new(turtleid),
+        }
+    }
+}
+
+pub static COMMANDS: once_cell::sync::Lazy<Vec<Control>> = once_cell::sync::Lazy::new(|| {
+    (0..=MAX_TURTLES)
+        .into_iter()
+        .map(|id| Control::new(id))
+        .collect()
+});
 
 #[derive(Clone, Debug)]
 pub enum Resp {
@@ -35,6 +59,8 @@ impl Into<Resp> for LuaResp {
 }
 
 pub struct Commands {
+    turtle_registered: AtomicBool,
+
     cmd: Mutex<String>,
     http_ready: AtomicBool,
     http_done: AtomicBool,
@@ -44,11 +70,20 @@ pub struct Commands {
 impl Commands {
     pub fn new() -> Self {
         Self {
+            turtle_registered: AtomicBool::new(false),
             cmd: Mutex::new("".to_string()),
             http_ready: AtomicBool::new(false),
             http_done: AtomicBool::new(false),
             resp: Mutex::new(Resp::Ok(Value::Bool(true))),
         }
+    }
+
+    pub fn register(&self) {
+        self.turtle_registered.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn turtle_registered(&self) -> bool {
+        self.turtle_registered.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     pub async fn run(&self, cmd: &str) -> Resp {

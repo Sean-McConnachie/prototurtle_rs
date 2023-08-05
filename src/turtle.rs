@@ -110,74 +110,82 @@ impl TryFrom<cmd::Resp> for Inspect {
 /// m_ == Move
 /// t_ == Turn
 /// i_ == Inspect
-pub struct Turt {}
+pub struct Turt {
+    id: usize
+}
 
 impl Turt {
-    pub async fn m_forw() -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS.run("turtle.forward()").await)
+    pub fn new(turtleid: usize) -> Self {
+        Self {
+            id: turtleid
+        }
     }
 
-    pub async fn m_back() -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS.run("turtle.back()").await)
+    pub async fn m_forw(&self) -> anyhow::Result<Movement> {
+        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.forward()").await)
     }
 
-    pub async fn m_up() -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS.run("turtle.up()").await)
+    pub async fn m_back(&self) -> anyhow::Result<Movement> {
+        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.back()").await)
     }
 
-    pub async fn m_down() -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS.run("turtle.down()").await)
+    pub async fn m_up(&self) -> anyhow::Result<Movement> {
+        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.up()").await)
     }
 
-    pub async fn t_left() -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS.run("turtle.turnLeft()").await)
+    pub async fn m_down(&self) -> anyhow::Result<Movement> {
+        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.down()").await)
     }
 
-    pub async fn t_right() -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS.run("turtle.turnRight()").await)
+    pub async fn t_left(&self) -> anyhow::Result<Movement> {
+        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.turnLeft()").await)
     }
 
-    pub async fn d_forw() -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS.run("turtle.dig()").await)
+    pub async fn t_right(&self) -> anyhow::Result<Movement> {
+        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.turnRight()").await)
     }
 
-    pub async fn d_down() -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS.run("turtle.digDown()").await)
+    pub async fn d_forw(&self) -> anyhow::Result<Movement> {
+        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.dig()").await)
     }
 
-    pub async fn d_up() -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS.run("turtle.digUp()").await)
+    pub async fn d_down(&self) -> anyhow::Result<Movement> {
+        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.digDown()").await)
     }
 
-    pub async fn i_forw() -> anyhow::Result<Inspect> {
-        Inspect::try_from(cmd::COMMANDS.run("turtle.inspect()").await)
+    pub async fn d_up(&self) -> anyhow::Result<Movement> {
+        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.digUp()").await)
     }
 
-    pub async fn i_up() -> anyhow::Result<Inspect> {
-        Inspect::try_from(cmd::COMMANDS.run("turtle.inspect()").await)
+    pub async fn i_forw(&self) -> anyhow::Result<Inspect> {
+        Inspect::try_from(cmd::COMMANDS[self.id].commands.run("turtle.inspect()").await)
     }
 
-    pub async fn i_down() -> anyhow::Result<Inspect> {
-        Inspect::try_from(cmd::COMMANDS.run("turtle.inspect()").await)
+    pub async fn i_up(&self) -> anyhow::Result<Inspect> {
+        Inspect::try_from(cmd::COMMANDS[self.id].commands.run("turtle.inspect()").await)
+    }
+
+    pub async fn i_down(&self) -> anyhow::Result<Inspect> {
+        Inspect::try_from(cmd::COMMANDS[self.id].commands.run("turtle.inspect()").await)
     }
 
     /// 0-indexed
-    pub async fn select(slot: u8) -> cmd::Resp {
+    pub async fn select(&self, slot: u8) -> cmd::Resp {
         if slot > 15 {
             panic!("Invalid slot number!");
         }
-        cmd::COMMANDS.run(&format!("turtle.select({})", slot + 1)).await
+        cmd::COMMANDS[self.id].commands.run(&format!("turtle.select({})", slot + 1)).await
     }
 
-    pub async fn p_forw() -> cmd::Resp {
-        cmd::COMMANDS.run("turtle.place()").await
+    pub async fn p_forw(&self) -> cmd::Resp {
+        cmd::COMMANDS[self.id].commands.run("turtle.place()").await
     }
 
-    pub async fn p_up() -> cmd::Resp {
-        cmd::COMMANDS.run("turtle.placeUp()").await
+    pub async fn p_up(&self) -> cmd::Resp {
+        cmd::COMMANDS[self.id].commands.run("turtle.placeUp()").await
     }
 
-    pub async fn p_down() -> cmd::Resp {
-        cmd::COMMANDS.run("turtle.placeDown()").await
+    pub async fn p_down(&self) -> cmd::Resp {
+        cmd::COMMANDS[self.id].commands.run("turtle.placeDown()").await
     }
 }
