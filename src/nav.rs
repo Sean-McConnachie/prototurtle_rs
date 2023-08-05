@@ -283,14 +283,14 @@ impl Nav {
         self.spos();
     }
 
-    pub async fn goto(&mut self, dst: Pos, order: Order) {
+    pub async fn goto(&mut self, dst: &Pos, order: Order) {
         let order = order.order_arr();
         for d in order.0..=order.2 {
             match d {
                 'x' => {
                     if self.p.x < dst.x {
                         self.t_head(Head::E).await;
-                    } else {
+                    } else if self.p.x > dst.x {
                         self.t_head(Head::W).await;
                     }
                     while self.p.x != dst.x {
@@ -302,7 +302,7 @@ impl Nav {
                         while self.p.y != dst.y {
                             self.m_up().await
                         }
-                    } else {
+                    } else if self.p.y > dst.y {
                         while self.p.y != dst.y {
                             self.m_down().await
                         }
@@ -311,7 +311,7 @@ impl Nav {
                 'z' => {
                     if self.p.z < dst.z {
                         self.t_head(Head::S).await;
-                    } else {
+                    } else if self.p.z > dst.z {
                         self.t_head(Head::N).await;
                     }
                     while self.p.z != dst.z {
@@ -321,6 +321,6 @@ impl Nav {
                 _ => panic!(),
             }
         }
-        self.t_head(dst.h).await;
+        self.t_head(dst.h.clone()).await;
     }
 }

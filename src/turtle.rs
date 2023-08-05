@@ -160,4 +160,24 @@ impl Turt {
     pub async fn i_down() -> anyhow::Result<Inspect> {
         Inspect::try_from(cmd::COMMANDS.run("turtle.inspect()").await)
     }
+
+    /// 0-indexed
+    pub async fn select(slot: u8) -> cmd::Resp {
+        if slot > 15 {
+            panic!("Invalid slot number!");
+        }
+        cmd::COMMANDS.run(&format!("turtle.select({})", slot + 1)).await
+    }
+
+    pub async fn p_forw() -> cmd::Resp {
+        cmd::COMMANDS.run("turtle.place()").await
+    }
+
+    pub async fn p_up() -> cmd::Resp {
+        cmd::COMMANDS.run("turtle.placeUp()").await
+    }
+
+    pub async fn p_down() -> cmd::Resp {
+        cmd::COMMANDS.run("turtle.placeDown()").await
+    }
 }

@@ -1,5 +1,6 @@
 use prototurtle_rs::turtle::Turt;
 use prototurtle_rs::{cmd, nav};
+use prototurtle_rs::floor;
 
 use rocket::serde::json::Json;
 use rocket::{get, post, routes};
@@ -32,27 +33,7 @@ async fn runtime_loop() {
     let mut n = nav::Nav::new(1);
     n.lpos();
 
-    n.goto(
-        nav::Pos {
-            x: 2,
-            y: 2,
-            z: 2,
-            h: nav::Head::E,
-        },
-        nav::Order::XYZ,
-    )
-    .await;
-
-    n.goto(
-        nav::Pos {
-            x: 0,
-            y: 0,
-            z: 0,
-            h: nav::Head::N,
-        },
-        nav::Order::XYZ,
-    )
-    .await;
+    floor::floor_placer(48, 44).await;
 
     cmd::COMMANDS.disconnect().await;
 }
