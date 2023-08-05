@@ -1,6 +1,4 @@
-use prototurtle_rs::turtle::Turt;
-use prototurtle_rs::{cmd, nav};
-use prototurtle_rs::floor;
+use crate::cmd;
 
 use rocket::serde::json::Json;
 use rocket::{get, post, routes};
@@ -29,17 +27,3 @@ pub async fn run() {
         .expect("Bye bye server...");
 }
 
-async fn runtime_loop() {
-    let mut n = nav::Nav::new(1);
-    n.lpos();
-
-    floor::floor_placer(48, 44).await;
-
-    cmd::COMMANDS.disconnect().await;
-}
-
-#[tokio::main]
-async fn main() {
-    let _web_server = tokio::spawn(run());
-    runtime_loop().await;
-}

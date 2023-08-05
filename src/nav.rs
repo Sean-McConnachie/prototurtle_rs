@@ -1,6 +1,8 @@
+use rocket::serde::json::Value;
+use std::fmt::Display;
 use std::io::{Seek, SeekFrom, Write};
 
-use crate::turtle::Turt;
+use crate::{cmd, turtle::Turt};
 
 pub enum Order {
     XYZ,
@@ -103,10 +105,41 @@ impl Default for Pos {
     }
 }
 
+impl Into<Pos> for Value {
+    fn into(self) -> Pos {
+        let p = self.as_array().unwrap();
+        Pos {
+            x: p[0].as_i64().unwrap(),
+            y: p[1].as_i64().unwrap(),
+            z: p[2].as_i64().unwrap(),
+            h: Head::N,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Nav {
     p: Pos,
     fp: std::path::PathBuf,
+}
+
+impl Display for Pos {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "({}, {}, {})[{}]",
+            self.x,
+            self.y,
+            self.z,
+            self.h.to_string()
+        )
+    }
+}
+
+impl Display for Nav {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.p)
+    }
 }
 
 impl Nav {
@@ -153,6 +186,30 @@ impl Nav {
         self.p.y = lines[1].parse::<i64>().unwrap();
         self.p.z = lines[2].parse::<i64>().unwrap();
         self.p.h = lines[3].as_str().into();
+    }
+
+    pub async fn gps_init(&mut self) {
+        let p1: Pos = match cmd::COMMANDS.run("gps.locate()").await {
+            cmd::Resp::Ok(v) => v.into(),
+            _ => panic!("Oh oh... no gps here."),
+        };
+
+        Self::ignore_err(Turt::m_forw().await);
+
+        self.p = match cmd::COMMANDS.run("gps.locate()").await {
+            cmd::Resp::Ok(v) => v.into(),
+            _ => panic!("This is bad..."),
+        };
+
+        self.p.h = if self.p.z < p1.z {
+            Head::N
+        } else if self.p.z > p1.z {
+            Head::S
+        } else if self.p.x < p1.x {
+            Head::W
+        } else {
+            Head::E
+        }
     }
 
     fn ignore_err<T, E>(_: Result<T, E>) -> () {}
