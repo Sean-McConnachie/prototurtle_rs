@@ -1,0 +1,9 @@
+[default]
+address = "0.0.0.0"
+port = 8080
+
+[default.shutdown]
+ctrlc = true
+grace = 10
+mercy = 2
+force= true
