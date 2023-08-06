@@ -1,8 +1,9 @@
+use crate::{cmd, turtle};
+
 use rocket::serde::json::Value;
 use std::fmt::Display;
 use std::io::{Seek, SeekFrom, Write};
-
-use crate::cmd;
+use std::sync::mpsc;
 
 pub enum Order {
     XYZ,
@@ -118,8 +119,12 @@ impl Into<Pos> for Value {
 }
 
 #[derive(Debug, Clone)]
-pub struct Nav {
-    id: usize,
+pub struct Nav<'a> {
+    next_tx: mpsc::Sender<String>,
+    cmdcomplete_rx: &'a mpsc::Receiver<cmd::Resp>,
+
+    turt: &'a turtle::Turt<'a>,
+
     p: Pos,
     fp: std::path::PathBuf,
 }
@@ -137,17 +142,24 @@ impl Display for Pos {
     }
 }
 
-impl Display for Nav {
+impl<'a> Display for Nav<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.p)
     }
 }
 
-impl Nav {
-    pub fn new(turtleid: usize) -> Self {
+impl<'a> Nav<'a> {
+    pub fn new(
+        turtleid: usize,
+        turt: &'a turtle::Turt,
+        next_tx: mpsc::Sender<String>,
+        cmdcomplete_rx: &'a mpsc::Receiver<cmd::Resp>,
+    ) -> Self {
         let fp = std::path::PathBuf::from(format!("turtle_positions/{turtleid}.turtle"));
         let s = Self {
-            id: turtleid,
+            next_tx,
+            cmdcomplete_rx,
+            turt,
             p: Pos::default(),
             fp,
         };
@@ -155,6 +167,20 @@ impl Nav {
             s.spos();
         }
         s
+    }
+
+    fn make_req_t<T>(&self, cmd: &str) -> Result<T, <T as TryFrom<cmd::Resp>>::Error>
+    where
+        T: TryFrom<cmd::Resp>,
+    {
+        self.next_tx.send(cmd.to_string()).unwrap();
+        let resp = self.cmdcomplete_rx.recv().unwrap();
+        T::try_from(resp)
+    }
+
+    fn make_req(&self, cmd: &str) -> cmd::Resp {
+        self.next_tx.send(cmd.to_string()).unwrap();
+        self.cmdcomplete_rx.recv().unwrap()
     }
 
     pub fn pos(&self) -> &Pos {
@@ -190,15 +216,15 @@ impl Nav {
         self.p.h = lines[3].as_str().into();
     }
 
-    pub async fn gps_init(&mut self) {
-        let p1: Pos = match cmd::COMMANDS[self.id].commands.run("gps.locate()").await {
+    pub fn gps_init(&mut self) {
+        let p1: Pos = match self.make_req("gps.locate()") {
             cmd::Resp::Ok(v) => v.into(),
             _ => panic!("Oh oh... no gps here."),
         };
 
-        Self::ignore_err(cmd::COMMANDS[self.id].turt.m_forw().await);
+        Self::ignore_err(self.turt.m_forw());
 
-        self.p = match cmd::COMMANDS[self.id].commands.run("gps.locate()").await {
+        self.p = match self.make_req("gps.locate()") {
             cmd::Resp::Ok(v) => v.into(),
             _ => panic!("This is bad..."),
         };
@@ -216,51 +242,51 @@ impl Nav {
 
     fn ignore_err<T, E>(_: Result<T, E>) -> () {}
 
-    pub async fn t_head(&mut self, h: Head) {
+    pub fn t_head(&mut self, h: Head) {
         let r = self.p.h.diff(&h);
         for _ in 0..r.abs() {
             match r < 0 {
-                true => self.t_left().await,
-                false => self.t_right().await,
+                true => self.t_left(),
+                false => self.t_right(),
             };
         }
         self.p.h = h;
         self.spos();
     }
 
-    pub async fn t_left(&mut self) {
+    pub fn t_left(&mut self) {
         self.p.h = match self.p.h {
             Head::N => Head::W,
             Head::E => Head::N,
             Head::S => Head::E,
             Head::W => Head::S,
         };
-        Self::ignore_err(cmd::COMMANDS[self.id].turt.t_left().await);
+        Self::ignore_err(self.turt.t_left());
         self.spos();
     }
 
-    pub async fn t_right(&mut self) {
+    pub fn t_right(&mut self) {
         self.p.h = match self.p.h {
             Head::N => Head::E,
             Head::E => Head::S,
             Head::S => Head::W,
             Head::W => Head::N,
         };
-        Self::ignore_err(cmd::COMMANDS[self.id].turt.t_right().await);
+        Self::ignore_err(self.turt.t_right());
         self.spos();
     }
 
-    pub async fn m_forw(&mut self) {
+    pub fn m_forw(&mut self) {
         loop {
-            match cmd::COMMANDS[self.id].turt.i_forw().await {
+            match self.turt.i_forw() {
                 Ok(i) => {
                     if i.block() {
-                        Self::ignore_err(cmd::COMMANDS[self.id].turt.d_forw().await)
+                        Self::ignore_err(self.turt.d_forw())
                     }
                 }
                 Err(_) => continue,
             }
-            match cmd::COMMANDS[self.id].turt.m_forw().await {
+            match self.turt.m_forw() {
                 Ok(m) => {
                     if m.success() {
                         break;
@@ -278,8 +304,8 @@ impl Nav {
         self.spos();
     }
 
-    pub async fn m_back(&mut self) {
-        match cmd::COMMANDS[self.id].turt.m_back().await {
+    pub fn m_back(&mut self) {
+        match self.turt.m_back() {
             Ok(m) => {
                 if !m.success() {
                     return;
@@ -296,17 +322,17 @@ impl Nav {
         self.spos();
     }
 
-    pub async fn m_up(&mut self) {
+    pub fn m_up(&mut self) {
         loop {
-            match cmd::COMMANDS[self.id].turt.i_up().await {
+            match self.turt.i_up() {
                 Ok(i) => {
                     if i.block() {
-                        Self::ignore_err(cmd::COMMANDS[self.id].turt.d_up().await)
+                        Self::ignore_err(self.turt.d_up())
                     }
                 }
                 Err(_) => continue,
             }
-            match cmd::COMMANDS[self.id].turt.m_up().await {
+            match self.turt.m_up() {
                 Ok(m) => {
                     if m.success() {
                         break;
@@ -319,17 +345,17 @@ impl Nav {
         self.spos();
     }
 
-    pub async fn m_down(&mut self) {
+    pub fn m_down(&mut self) {
         loop {
-            match cmd::COMMANDS[self.id].turt.i_down().await {
+            match self.turt.i_down() {
                 Ok(i) => {
                     if i.block() {
-                        Self::ignore_err(cmd::COMMANDS[self.id].turt.d_down().await)
+                        Self::ignore_err(self.turt.d_down())
                     }
                 }
                 Err(_) => continue,
             }
-            match cmd::COMMANDS[self.id].turt.m_down().await {
+            match self.turt.m_down() {
                 Ok(m) => {
                     if m.success() {
                         break;
@@ -342,44 +368,42 @@ impl Nav {
         self.spos();
     }
 
-    pub async fn goto(&mut self, dst: &Pos, order: Order) {
+    pub fn goto(&mut self, dst: &Pos, order: Order) {
         let order = order.order_arr();
         for d in order.0..=order.2 {
             match d {
                 'x' => {
                     if self.p.x < dst.x {
-                        self.t_head(Head::E).await;
+                        self.t_head(Head::E);
                     } else if self.p.x > dst.x {
-                        self.t_head(Head::W).await;
+                        self.t_head(Head::W);
                     }
                     while self.p.x != dst.x {
-                        self.m_forw().await;
+                        self.m_forw();
                     }
                 }
                 'y' => {
                     if self.p.y < dst.y {
                         while self.p.y != dst.y {
-                            self.m_up().await
-                        }
+                            self.m_up()                        }
                     } else if self.p.y > dst.y {
                         while self.p.y != dst.y {
-                            self.m_down().await
-                        }
+                            self.m_down()                        }
                     };
                 }
                 'z' => {
                     if self.p.z < dst.z {
-                        self.t_head(Head::S).await;
+                        self.t_head(Head::S);
                     } else if self.p.z > dst.z {
-                        self.t_head(Head::N).await;
+                        self.t_head(Head::N);
                     }
                     while self.p.z != dst.z {
-                        self.m_forw().await;
+                        self.m_forw();
                     }
                 }
                 _ => panic!(),
             }
         }
-        self.t_head(dst.h.clone()).await;
+        self.t_head(dst.h.clone());
     }
 }

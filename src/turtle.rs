@@ -3,6 +3,10 @@ use crate::cmd;
 use rocket::serde::json::Value;
 use serde::Deserialize;
 
+use std::sync::mpsc;
+
+use std::convert::TryFrom;
+
 #[derive(Deserialize, Debug)]
 pub struct Movement {
     success: bool,
@@ -110,82 +114,106 @@ impl TryFrom<cmd::Resp> for Inspect {
 /// m_ == Move
 /// t_ == Turn
 /// i_ == Inspect
-pub struct Turt {
-    id: usize
+#[derive(Debug)]
+pub struct Turt<'a> {
+    next_tx: mpsc::Sender<String>,
+    cmdcomplete_rx: &'a mpsc::Receiver<cmd::Resp>,
 }
 
-impl Turt {
-    pub fn new(turtleid: usize) -> Self {
+impl<'a> Turt<'a> {
+    pub fn new(
+        next_tx: mpsc::Sender<String>,
+        cmdcomplete_rx: &'a mpsc::Receiver<cmd::Resp>,
+    ) -> Self {
         Self {
-            id: turtleid
+            next_tx,
+            cmdcomplete_rx,
         }
     }
 
-    pub async fn m_forw(&self) -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.forward()").await)
+    fn make_req_t<T>(&self, cmd: &str) -> Result<T, <T as TryFrom<cmd::Resp>>::Error>
+    where
+        T: TryFrom<cmd::Resp>,
+    {
+        self.next_tx.send(cmd.to_string()).unwrap();
+        let resp = self.cmdcomplete_rx.recv().unwrap();
+        T::try_from(resp)
     }
 
-    pub async fn m_back(&self) -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.back()").await)
+    fn make_req(&self, cmd: &str) -> cmd::Resp {
+        self.next_tx.send(cmd.to_string()).unwrap();
+        self.cmdcomplete_rx.recv().unwrap()
     }
 
-    pub async fn m_up(&self) -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.up()").await)
+    pub fn m_forw(&self) -> anyhow::Result<Movement> {
+        self.make_req_t("turtle.forward()")
     }
 
-    pub async fn m_down(&self) -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.down()").await)
+    pub fn m_back(&self) -> anyhow::Result<Movement> {
+        self.make_req_t("turtle.back()")
     }
 
-    pub async fn t_left(&self) -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.turnLeft()").await)
+    pub fn m_up(&self) -> anyhow::Result<Movement> {
+        self.make_req_t("turtle.up()")
     }
 
-    pub async fn t_right(&self) -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.turnRight()").await)
+    pub fn m_down(&self) -> anyhow::Result<Movement> {
+        self.make_req_t("turtle.down()")
     }
 
-    pub async fn d_forw(&self) -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.dig()").await)
+    pub fn t_left(&self) -> anyhow::Result<Movement> {
+        self.make_req_t("turtle.turnLeft()")
     }
 
-    pub async fn d_down(&self) -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.digDown()").await)
+    pub fn t_right(&self) -> anyhow::Result<Movement> {
+        self.make_req_t("turtle.turnRight()")
     }
 
-    pub async fn d_up(&self) -> anyhow::Result<Movement> {
-        Movement::try_from(cmd::COMMANDS[self.id].commands.run("turtle.digUp()").await)
+    pub fn d_forw(&self) -> anyhow::Result<Movement> {
+        self.make_req_t("turtle.dig()")
     }
 
-    pub async fn i_forw(&self) -> anyhow::Result<Inspect> {
-        Inspect::try_from(cmd::COMMANDS[self.id].commands.run("turtle.inspect()").await)
+    pub fn d_down(&self) -> anyhow::Result<Movement> {
+        self.make_req_t("turtle.digDown()")
     }
 
-    pub async fn i_up(&self) -> anyhow::Result<Inspect> {
-        Inspect::try_from(cmd::COMMANDS[self.id].commands.run("turtle.inspect()").await)
+    pub fn d_up(&self) -> anyhow::Result<Movement> {
+        self.make_req_t("turtle.digUp()")
     }
 
-    pub async fn i_down(&self) -> anyhow::Result<Inspect> {
-        Inspect::try_from(cmd::COMMANDS[self.id].commands.run("turtle.inspect()").await)
+    pub fn i_forw(&self) -> anyhow::Result<Inspect> {
+        self.make_req_t("turtle.inspect()")
+    }
+
+    pub fn i_up(&self) -> anyhow::Result<Inspect> {
+        self.make_req_t("turtle.inspect()")
+    }
+
+    pub fn i_down(&self) -> anyhow::Result<Inspect> {
+        self.make_req_t("turtle.inspect()")
     }
 
     /// 0-indexed
-    pub async fn select(&self, slot: u8) -> cmd::Resp {
+    pub fn select(&self, slot: u8) -> cmd::Resp {
         if slot > 15 {
             panic!("Invalid slot number!");
         }
-        cmd::COMMANDS[self.id].commands.run(&format!("turtle.select({})", slot + 1)).await
+        self.make_req(&format!("turtle.select({})", slot + 1))
     }
 
-    pub async fn p_forw(&self) -> cmd::Resp {
-        cmd::COMMANDS[self.id].commands.run("turtle.place()").await
+    pub fn p_forw(&self) -> cmd::Resp {
+        self.make_req("turtle.place()")
     }
 
-    pub async fn p_up(&self) -> cmd::Resp {
-        cmd::COMMANDS[self.id].commands.run("turtle.placeUp()").await
+    pub fn p_up(&self) -> cmd::Resp {
+        self.make_req("turtle.placeUp()")
     }
 
-    pub async fn p_down(&self) -> cmd::Resp {
-        cmd::COMMANDS[self.id].commands.run("turtle.placeDown()").await
+    pub fn p_down(&self) -> cmd::Resp {
+        self.make_req("turtle.placeDown()")
+    }
+
+    pub fn disconnect(&self) {
+        self.next_tx.send("EXIT".to_string()).unwrap();
     }
 }
