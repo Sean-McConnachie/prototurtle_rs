@@ -92,10 +92,33 @@ pub struct Pos {
     pub x: i64,
     pub y: i64,
     pub z: i64,
-    pub h: Head,
+}
+
+impl Display for Pos {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {}, {})", self.x, self.y, self.z)
+    }
 }
 
 impl Default for Pos {
+    fn default() -> Self {
+        Self {
+            x: 0,
+            y: 0,
+            z: 0
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PosH {
+    pub x: i64,
+    pub y: i64,
+    pub z: i64,
+    pub h: Head,
+}
+
+impl Default for PosH {
     fn default() -> Self {
         Self {
             x: 0,
@@ -106,10 +129,10 @@ impl Default for Pos {
     }
 }
 
-impl Into<Pos> for Value {
-    fn into(self) -> Pos {
+impl Into<PosH> for Value {
+    fn into(self) -> PosH {
         let p = self.as_array().unwrap();
-        Pos {
+        PosH {
             x: p[0].as_i64().unwrap(),
             y: p[1].as_i64().unwrap(),
             z: p[2].as_i64().unwrap(),
@@ -125,11 +148,11 @@ pub struct Nav<'a> {
 
     turt: &'a turtle::Turt<'a>,
 
-    p: Pos,
+    p: PosH,
     fp: std::path::PathBuf,
 }
 
-impl Display for Pos {
+impl Display for PosH {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -160,7 +183,7 @@ impl<'a> Nav<'a> {
             next_tx,
             cmdcomplete_rx,
             turt,
-            p: Pos::default(),
+            p: PosH::default(),
             fp,
         };
         if !s.fp.exists() {
@@ -183,7 +206,7 @@ impl<'a> Nav<'a> {
         self.cmdcomplete_rx.recv().unwrap()
     }
 
-    pub fn pos(&self) -> &Pos {
+    pub fn pos(&self) -> &PosH {
         &self.p
     }
 
@@ -217,12 +240,12 @@ impl<'a> Nav<'a> {
     }
 
     pub fn gps_init(&mut self) {
-        let p1: Pos = match self.make_req("gps.locate()") {
+        let p1: PosH = match self.make_req("gps.locate()") {
             cmd::Resp::Ok(v) => v.into(),
             _ => panic!("Oh oh... no gps here."),
         };
 
-        Self::ignore_err(self.turt.m_forw());
+        self.m_forw();
 
         self.p = match self.make_req("gps.locate()") {
             cmd::Resp::Ok(v) => v.into(),
@@ -368,7 +391,7 @@ impl<'a> Nav<'a> {
         self.spos();
     }
 
-    pub fn goto(&mut self, dst: &Pos, order: Order) {
+    pub fn goto(&mut self, dst: &PosH, order: Order) {
         let order = order.order_arr();
         for d in order.0..=order.2 {
             match d {

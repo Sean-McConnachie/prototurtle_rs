@@ -186,11 +186,11 @@ impl<'a> Turt<'a> {
     }
 
     pub fn i_up(&self) -> anyhow::Result<Inspect> {
-        self.make_req_t("turtle.inspect()")
+        self.make_req_t("turtle.inspectUp()")
     }
 
     pub fn i_down(&self) -> anyhow::Result<Inspect> {
-        self.make_req_t("turtle.inspect()")
+        self.make_req_t("turtle.inspectDown()")
     }
 
     /// 0-indexed
