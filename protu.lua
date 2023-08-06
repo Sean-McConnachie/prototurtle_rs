@@ -1,7 +1,8 @@
 json = require("json")
 local http = http
 local sleep = sleep
-require("nav")
+
+local TURTLE_ID = "/2"
 
 local API = "http://192.168.1.92:8080/"
 
@@ -13,8 +14,8 @@ local function cresp(code, output)
 end
 
 local function cmdcomplete(body)
-	local _, err = http.post({
-		url = API .. "cmdcomplete",
+	local _, _ = http.post({
+		url = API .. "cmdcomplete" .. TURTLE_ID,
 		headers = {
 			["Content-Type"] = "application/json",
 		},
@@ -23,7 +24,7 @@ local function cmdcomplete(body)
 end
 
 local function next()
-	local resp, err = http.get(API .. "next")
+	local resp, err = http.get(API .. "next" .. TURTLE_ID)
 	if err ~= nil then
 		return
 	end
@@ -32,9 +33,25 @@ local function next()
 	return resp.readAll()
 end
 
+local function register()
+	print("Trying to register...")
+	while true do
+		local resp, err = http.post({
+			url = API .. "register" .. TURTLE_ID,
+			body = "",
+		})
+		if err == nil then
+			break
+		end
+		sleep(1)
+	end
+	print("Registered!")
+end
+
+register()
+
 local cmd, func, rtnval
 
--- while true
 while true do
 	cmd = next()
 	--print("iter: " .. i .. " | cmd: ".. cmd)
@@ -58,4 +75,3 @@ while true do
 		end
 	end
 end
-
