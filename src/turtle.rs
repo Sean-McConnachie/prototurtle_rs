@@ -59,6 +59,49 @@ impl TryFrom<cmd::Resp> for Movement {
     }
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct TurtSlot {
+    count: i32,
+    name: String,
+}
+
+impl TryInto<TurtSlot> for Value {
+    type Error = anyhow::Error;
+    fn try_into(self) -> Result<TurtSlot, Self::Error> {
+        let s = self.as_array().unwrap();
+        if s.len() == 0 {
+            return Err(anyhow::anyhow!("No item"));
+        }
+
+        let o = s[0].as_object().unwrap();
+        Ok(TurtSlot {
+            count: o.get("count").unwrap().as_i64().unwrap() as i32,
+            name: o.get("name").unwrap().as_str().unwrap().to_string(),
+        })
+    }
+}
+
+impl TryFrom<cmd::Resp> for TurtSlot {
+    type Error = anyhow::Error;
+    fn try_from(value: cmd::Resp) -> Result<Self, Self::Error> {
+        match value {
+            cmd::Resp::Ok(v) => v.try_into(),
+            cmd::Resp::BadReq(e) => Err(anyhow::anyhow!(e)),
+            cmd::Resp::BadCode(e) => Err(anyhow::anyhow!(e)),
+        }
+    }
+}
+
+impl TurtSlot {
+    pub fn count(&self) -> i32 {
+        self.count
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
 #[derive(Deserialize, Debug)]
 pub struct Inspect {
     block: bool,
@@ -141,7 +184,7 @@ impl<'a> Turt<'a> {
     }
 
     fn make_req(&self, cmd: &str) -> cmd::Resp {
-        self.next_tx.send(cmd.to_string()).unwrap();
+       self.next_tx.send(cmd.to_string()).unwrap();
         self.cmdcomplete_rx.recv().unwrap()
     }
 
@@ -194,11 +237,33 @@ impl<'a> Turt<'a> {
     }
 
     /// 0-indexed
-    pub fn select(&self, slot: u8) -> cmd::Resp {
+    pub fn inv_select(&self, slot: u8) -> cmd::Resp {
         if slot > 15 {
             panic!("Invalid slot number!");
         }
         self.make_req(&format!("turtle.select({})", slot + 1))
+    }
+
+    pub fn inv_item_detail(&self, slot: u8) -> Option<TurtSlot> {
+        if slot > 15 {
+            panic!("Invalid slot number!");
+        }
+        match self.make_req_t::<TurtSlot>(&format!("turtle.getItemDetail({})", slot + 1)) {
+            Ok(s) => Some(s),
+            Err(_) => None,
+        }
+    }
+
+    pub fn inv_drop_forw(&self) -> cmd::Resp {
+        self.make_req("turtle.drop()")
+    }
+
+    pub fn inv_drop_down(&self) -> cmd::Resp {
+        self.make_req("turtle.dropDown()")
+    }
+
+    pub fn inv_drop_up(&self) -> cmd::Resp {
+        self.make_req("turtle.dropUp()")
     }
 
     pub fn p_forw(&self) -> cmd::Resp {

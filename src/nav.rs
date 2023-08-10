@@ -118,6 +118,17 @@ pub struct PosH {
     pub h: Head,
 }
 
+impl Into<PosH> for Pos {
+    fn into(self) -> PosH {
+        PosH {
+            x: self.x,
+            y: self.y,
+            z: self.z,
+            h: Head::N
+        }
+    }
+}
+
 impl Default for PosH {
     fn default() -> Self {
         Self {

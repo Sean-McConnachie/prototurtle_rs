@@ -1,7 +1,10 @@
-use crate::{entry, nav, turtle};
+use crate::{entry, inventory, nav, turtle};
 
 use std::io::Write;
 use std::path;
+
+const TURT_INV: usize = 16;
+const CHEST_SIZE: usize = 27;
 
 #[derive(Debug)]
 pub struct ChunkDigger<'a> {
@@ -10,6 +13,7 @@ pub struct ChunkDigger<'a> {
 
     turt: &'a turtle::Turt<'a>,
     nav: &'a mut nav::Nav<'a>,
+    inv: inventory::Inventory<'a>,
 
     step: usize,
     stack_count: usize,
@@ -26,10 +30,46 @@ impl<'a> ChunkDigger<'a> {
             turt,
             nav,
 
+            inv: inventory::Inventory::init(&turt),
+
             step: 0,
             stack_count: 0,
 
             fp: path::PathBuf::from(format!("progress/{turtleid}.turtle")),
+        }
+    }
+
+    fn inv_check(&mut self) {
+        self.inv.full_update();
+        if self.inv.is_full() {
+            self.stack_count += TURT_INV;
+            let spos = self.nav.pos().clone();
+
+            let offset = (self.stack_count - TURT_INV) / CHEST_SIZE;
+            let max_chest_space = CHEST_SIZE - ((self.stack_count - TURT_INV) % CHEST_SIZE);
+
+            let mut chest_loc: nav::PosH = self.p1.clone().into();
+            chest_loc.z = self.p2.z - offset as i64;
+            dbg!(&offset);
+            dbg!(&chest_loc);
+            self.nav.goto(&chest_loc, nav::Order::XYZ);
+
+            for s in 0..max_chest_space.min(TURT_INV) {
+                self.turt.inv_select(s as u8);
+                self.turt.inv_drop_down();
+            }
+            dbg!(max_chest_space);
+            if max_chest_space < TURT_INV {
+                chest_loc.z -= 1;
+                self.nav.goto(&chest_loc, nav::Order::XYZ);
+
+                for s in max_chest_space..TURT_INV {
+                    self.turt.inv_select(s as u8);
+                    self.turt.inv_drop_down();
+                }
+            }
+
+            self.nav.goto(&spos, nav::Order::XYZ);
         }
     }
 
@@ -122,9 +162,13 @@ impl<'a> ChunkDigger<'a> {
                     self.turt.d_up().unwrap();
                     self.turt.d_down().unwrap();
                 }
+                self.inv_check();
             }
             self.step += 1;
             self.save_progress();
         }
+        let mut chest_loc: nav::PosH = self.p1.clone().into();
+        chest_loc.z = self.p2.z;
+        self.nav.goto(&chest_loc, nav::Order::XYZ);
     }
 }
