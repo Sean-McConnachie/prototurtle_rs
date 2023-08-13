@@ -161,6 +161,9 @@ impl<'a> ChunkDigger<'a> {
                     self.nav.goto(&p, nav::Order::XYZ);
                     self.turt.d_up().unwrap();
                     self.turt.d_down().unwrap();
+                    if z % 63 == 0 {
+                        self.inv_check();
+                    }
                 }
                 self.inv_check();
             }

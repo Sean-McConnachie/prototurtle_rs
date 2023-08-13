@@ -5,14 +5,14 @@ use std::sync::mpsc;
 
 pub type ClientChanels = (mpsc::Sender<String>, mpsc::Receiver<cmd::Resp>);
 
-const ACTIVE_TURTLES: &[usize] = &[9, 10, 11, 12];
-const DEPTH_PT: i64 = 8 * 16;
-const WIDTH_PT: i64 = 1 * 16;
-const HEIGHT_PT: i64 = 6;
+const ACTIVE_TURTLES: &[usize] = &[9, 10, 11, 12, 18, 19, 20, 21];
+const DEPTH_PT: i64 = 3;
+const WIDTH_PT: i64 = 1;
+const HEIGHT_PT: i64 = 3;
 const START_POS: nav::Pos = nav::Pos {
-    x: -27 - (4 * 16),
+    x: -97 - (8),
     y: 8,
-    z: 31,
+    z: 10,
 };
 
 pub fn entry_point(turtleid: usize, chans: ClientChanels) {
