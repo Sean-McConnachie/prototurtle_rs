@@ -1,4 +1,4 @@
-use prototurtle_rs::{server};
+use prototurtle_rs::server;
 
 #[tokio::main]
 pub async fn main() {

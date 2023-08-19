@@ -7,6 +7,8 @@ use std::thread;
 
 use std::sync::{mpsc, RwLock};
 
+const TURTLE_CAPACITY: usize = 32;
+
 struct WebServerChannels {
     next_rx: mpsc::Receiver<String>,
     cmdcomplete_tx: mpsc::Sender<cmd::Resp>,
@@ -15,7 +17,7 @@ struct WebServerChannels {
 unsafe impl Sync for WebServerChannels {}
 
 impl WebServerChannels {
-    fn new() -> (Self, entry::ClientChanels) {
+    fn new() -> (Self, entry::ClientChannels) {
         let (next_tx, next_rx): (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel();
         let (cmdcomplete_tx, cmdcomplete_rx): (mpsc::Sender<cmd::Resp>, mpsc::Receiver<cmd::Resp>) =
             mpsc::channel();
@@ -42,12 +44,16 @@ struct BotNet {
 
 impl BotNet {
     fn new() -> Self {
+        let mut turtles = Vec::with_capacity(TURTLE_CAPACITY);
+        for _ in 0..TURTLE_CAPACITY {
+            turtles.push(WebServerChannels::default());
+        }
         Self {
-            turtles: RwLock::new(vec![]),
+            turtles: RwLock::new(turtles),
         }
     }
 
-    fn register_turtle(&self, turtleid: usize) -> entry::ClientChanels {
+    fn register_turtle(&self, turtleid: usize) -> entry::ClientChannels {
         let mut turts = self.turtles.write().unwrap();
         if turtleid > turts.len() {
             for _ in turts.len()..turtleid + 1 {
@@ -80,11 +86,12 @@ async fn cmdcomplete(bot_net: &State<BotNet>, turtleid: usize, body: Json<cmd::L
     let lua_resp = body.into_inner();
     let resp: cmd::Resp = lua_resp.into();
 
-    match bot_net.turtles.read().unwrap()[turtleid] 
+    match bot_net.turtles.read().unwrap()[turtleid]
         .cmdcomplete_tx
-        .send(resp) {
-            Ok(_) => (),
-            Err(_) => println!("Turtle {turtleid} has disconnected!")
+        .send(resp)
+    {
+        Ok(_) => (),
+        Err(_) => println!("Turtle {turtleid} has disconnected!"),
     };
 }
 

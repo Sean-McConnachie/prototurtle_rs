@@ -94,6 +94,16 @@ pub struct Pos {
     pub z: i64,
 }
 
+impl Into<Pos> for &PosH {
+    fn into(self) -> Pos {
+        Pos {
+            x: self.x,
+            y: self.y,
+            z: self.z,
+        }
+    }
+}
+
 impl Display for Pos {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {}, {})", self.x, self.y, self.z)
@@ -105,7 +115,7 @@ impl Default for Pos {
         Self {
             x: 0,
             y: 0,
-            z: 0
+            z: 0,
         }
     }
 }
@@ -124,7 +134,7 @@ impl Into<PosH> for Pos {
             x: self.x,
             y: self.y,
             z: self.z,
-            h: Head::N
+            h: Head::N,
         }
     }
 }
@@ -203,14 +213,6 @@ impl<'a> Nav<'a> {
         s
     }
 
-    fn make_req_t<T>(&self, cmd: &str) -> Result<T, <T as TryFrom<cmd::Resp>>::Error>
-    where
-        T: TryFrom<cmd::Resp>,
-    {
-        self.next_tx.send(cmd.to_string()).unwrap();
-        let resp = self.cmdcomplete_rx.recv().unwrap();
-        T::try_from(resp)
-    }
 
     fn make_req(&self, cmd: &str) -> cmd::Resp {
         self.next_tx.send(cmd.to_string()).unwrap();
@@ -232,9 +234,9 @@ impl<'a> Nav<'a> {
                 self.p.z,
                 self.p.h.to_string()
             )
-            .as_bytes(),
+                .as_bytes(),
         )
-        .unwrap();
+            .unwrap();
     }
 
     pub fn lpos(&mut self) {
@@ -402,7 +404,12 @@ impl<'a> Nav<'a> {
         self.spos();
     }
 
-    pub fn goto(&mut self, dst: &PosH, order: Order) {
+    pub fn goto_head(&mut self, dst: &PosH, order: Order) {
+        self.goto_nohead(&dst.into(), order);
+        self.t_head(dst.h.clone());
+    }
+
+    pub fn goto_nohead(&mut self, dst: &Pos, order: Order) {
         let order = order.order_arr();
         for d in order.0..=order.2 {
             match d {
@@ -419,10 +426,12 @@ impl<'a> Nav<'a> {
                 'y' => {
                     if self.p.y < dst.y {
                         while self.p.y != dst.y {
-                            self.m_up()                        }
+                            self.m_up()
+                        }
                     } else if self.p.y > dst.y {
                         while self.p.y != dst.y {
-                            self.m_down()                        }
+                            self.m_down()
+                        }
                     };
                 }
                 'z' => {
@@ -438,6 +447,5 @@ impl<'a> Nav<'a> {
                 _ => panic!(),
             }
         }
-        self.t_head(dst.h.clone());
     }
 }

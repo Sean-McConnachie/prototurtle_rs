@@ -188,6 +188,18 @@ impl<'a> Turt<'a> {
         self.cmdcomplete_rx.recv().unwrap()
     }
 
+    pub fn suck(&self) -> cmd::Resp {
+        self.make_req("turtle.suck()")
+    }
+
+    pub fn suck_up(&self) -> cmd::Resp {
+        self.make_req("turtle.suckUp()")
+    }
+
+    pub fn suck_down(&self) -> cmd::Resp {
+        self.make_req("turtle.suckDown()")
+    }
+
     pub fn m_forw(&self) -> anyhow::Result<Movement> {
         self.make_req_t("turtle.forward()")
     }

@@ -1,4 +1,4 @@
-use crate::{entry, inventory, nav, turtle};
+use crate::{inventory, nav, turtle};
 
 use std::io::Write;
 use std::path;
@@ -52,7 +52,7 @@ impl<'a> ChunkDigger<'a> {
             chest_loc.z = self.p2.z - offset as i64;
             dbg!(&offset);
             dbg!(&chest_loc);
-            self.nav.goto(&chest_loc, nav::Order::XYZ);
+            self.nav.goto_head(&chest_loc, nav::Order::XYZ);
 
             for s in 0..max_chest_space.min(TURT_INV) {
                 self.turt.inv_select(s as u8);
@@ -61,7 +61,7 @@ impl<'a> ChunkDigger<'a> {
             dbg!(max_chest_space);
             if max_chest_space < TURT_INV {
                 chest_loc.z -= 1;
-                self.nav.goto(&chest_loc, nav::Order::XYZ);
+                self.nav.goto_head(&chest_loc, nav::Order::XYZ);
 
                 for s in max_chest_space..TURT_INV {
                     self.turt.inv_select(s as u8);
@@ -69,7 +69,7 @@ impl<'a> ChunkDigger<'a> {
                 }
             }
 
-            self.nav.goto(&spos, nav::Order::XYZ);
+            self.nav.goto_head(&spos, nav::Order::XYZ);
         }
     }
 
@@ -131,6 +131,8 @@ impl<'a> ChunkDigger<'a> {
         let x_diff = self.p1.x.abs_diff(self.p2.x) as usize + 1;
         let z_diff = self.p1.z.abs_diff(self.p2.z) as usize + 1;
 
+        //let mut blocks_placed = 0;
+
         for y in self.step..y_diff {
             p.y = self.p1.y + (y as i64 * 3) + 1;
             for x in 0..x_diff {
@@ -158,9 +160,20 @@ impl<'a> ChunkDigger<'a> {
                         _ => panic!(),
                     }
 
-                    self.nav.goto(&p, nav::Order::XYZ);
+                    self.nav.goto_head(&p, nav::Order::XYZ);
+
                     self.turt.d_up().unwrap();
                     self.turt.d_down().unwrap();
+
+                    // FLOOR PLACER ===
+                    //if y == 0 {
+                        //if blocks_placed % 64 == 0 {
+                            //self.turt.inv_select((blocks_placed / 64) % 16);
+                        //}
+                        //self.turt.p_down();
+                        //blocks_placed += 1;
+                    //}
+
                     if z % 63 == 0 {
                         self.inv_check();
                     }
@@ -172,6 +185,6 @@ impl<'a> ChunkDigger<'a> {
         }
         let mut chest_loc: nav::PosH = self.p1.clone().into();
         chest_loc.z = self.p2.z;
-        self.nav.goto(&chest_loc, nav::Order::XYZ);
+        self.nav.goto_head(&chest_loc, nav::Order::XYZ);
     }
 }
