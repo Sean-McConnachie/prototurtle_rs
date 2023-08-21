@@ -760,6 +760,7 @@ dependencies = [
  "anyhow",
  "modelutils_rs",
  "once_cell",
+ "rand",
  "rocket",
  "serde",
  "tokio",

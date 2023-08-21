@@ -104,8 +104,7 @@ impl TurtSlot {
 
 #[derive(Deserialize, Debug)]
 pub struct Inspect {
-    block: bool,
-    name: Option<String>,
+    block: Option<String>,
 }
 
 impl TryInto<Inspect> for Value {
@@ -119,27 +118,22 @@ impl TryInto<Inspect> for Value {
 
         let block = vals[0].as_bool().ok_or(anyhow::anyhow!("Not a bool"))?;
         if !block {
-            Ok(Inspect { block, name: None })
+            Ok(Inspect { block: None })
         } else {
             let name = vals[1]["name"]
                 .as_str()
                 .ok_or(anyhow::anyhow!("No name."))?
                 .to_string();
             Ok(Inspect {
-                block,
-                name: Some(name),
+                block: Some(name),
             })
         }
     }
 }
 
 impl Inspect {
-    pub fn block(&self) -> bool {
-        self.block
-    }
-
-    pub fn name(&self) -> &Option<String> {
-        &self.name
+    pub fn block(&self) -> &Option<String> {
+        &self.block
     }
 }
 
@@ -175,8 +169,8 @@ impl<'a> Turt<'a> {
     }
 
     fn make_req_t<T>(&self, cmd: &str) -> Result<T, <T as TryFrom<cmd::Resp>>::Error>
-    where
-        T: TryFrom<cmd::Resp>,
+        where
+            T: TryFrom<cmd::Resp>,
     {
         self.next_tx.send(cmd.to_string()).unwrap();
         let resp = self.cmdcomplete_rx.recv().unwrap();
@@ -184,7 +178,7 @@ impl<'a> Turt<'a> {
     }
 
     fn make_req(&self, cmd: &str) -> cmd::Resp {
-       self.next_tx.send(cmd.to_string()).unwrap();
+        self.next_tx.send(cmd.to_string()).unwrap();
         self.cmdcomplete_rx.recv().unwrap()
     }
 

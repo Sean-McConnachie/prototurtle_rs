@@ -33,7 +33,7 @@ fn union(parents: &mut Vec<Node>, node_a: Node, node_b: Node) {
     parents[parent_a as usize] = parent_b;
 }
 
-pub fn nodes_to_mst_to_path(nodes: &Vec<(CoordXZ, Block)>) -> Vec<uint> {
+fn nodes_to_mst_to_path(nodes: &Vec<(CoordXZ, Block)>) -> Vec<uint> {
     // Kruskal MST
     let n = nodes.len();
     let mut edges: Vec<Edge> = Vec::with_capacity(n * n);
@@ -70,35 +70,6 @@ pub fn nodes_to_mst_to_path(nodes: &Vec<(CoordXZ, Block)>) -> Vec<uint> {
             for child in adj_list[node as usize].iter() {
                 stack.push(*child);
                 path.push(*child);
-            }
-        }
-    }
-
-    path
-}
-
-fn mst_to_path(mst: HashMap<CoordXZ, (Block, Vec<CoordXZ>)>) -> Vec<(Block, CoordXZ)> {
-    if mst.is_empty() { return Vec::new(); }
-
-    let mut path: Vec<(Block, CoordXZ)> = Vec::new();
-    let mut stack: Vec<CoordXZ> = Vec::new();
-    let mut visited: HashSet<&CoordXZ> = HashSet::new();
-
-    let node = mst.keys().next().unwrap();
-    stack.push(*node);
-    visited.insert(node);
-
-    // DFS
-    while !stack.is_empty() {
-        let node = stack.pop().unwrap();
-
-        if let Some(desc) = mst.get(&node) {
-            path.push((desc.0, node));
-            for child in desc.1.iter() {
-                if !visited.contains(child) {
-                    stack.push(*child);
-                    visited.insert(child);
-                }
             }
         }
     }
@@ -188,7 +159,7 @@ impl<'a> MultiBuilder<'a> {
         let mut blocks_placed = 0;
 
         for (y, layer) in nodes
-            .into_iter().skip(self.start_layer).enumerate() {
+            .into_iter().rev().skip(self.start_layer).enumerate() {
             if layer.is_empty() { continue; }
 
             self.start_layer = y;
@@ -196,7 +167,7 @@ impl<'a> MultiBuilder<'a> {
 
             let path = nodes_to_mst_to_path(&layer);
 
-            for node  in path {
+            for node in path {
                 let (coord, block) = layer[node as usize];
                 self.nav.goto_nohead(&world_coord(&self.start_pos, coord, y), nav::Order::XYZ);
                 self.turt.inv_select(((blocks_placed / 64) % 16) as u8);

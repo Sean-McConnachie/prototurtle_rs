@@ -1,5 +1,8 @@
 use crate::{cmd, turtle};
 
+const MAX_TURTLE_WAIT_MILLIS: u64 = 5000;
+
+use rand::Rng;
 use rocket::serde::json::Value;
 use std::fmt::Display;
 use std::io::{Seek, SeekFrom, Write};
@@ -170,6 +173,7 @@ impl Into<PosH> for Value {
 
 #[derive(Debug, Clone)]
 pub struct Nav<'a> {
+    avoid_other_turtles: bool,
     next_tx: mpsc::Sender<String>,
     cmdcomplete_rx: &'a mpsc::Receiver<cmd::Resp>,
 
@@ -200,6 +204,7 @@ impl<'a> Display for Nav<'a> {
 
 impl<'a> Nav<'a> {
     pub fn new(
+        avoid_other_turtles: bool,
         turtleid: usize,
         turt: &'a turtle::Turt,
         next_tx: mpsc::Sender<String>,
@@ -207,6 +212,7 @@ impl<'a> Nav<'a> {
     ) -> Self {
         let fp = std::path::PathBuf::from(format!("turtle_positions/{turtleid}.turtle"));
         let s = Self {
+            avoid_other_turtles,
             next_tx,
             cmdcomplete_rx,
             turt,
@@ -318,13 +324,34 @@ impl<'a> Nav<'a> {
         self.spos();
     }
 
+    fn avoid_turtle(
+        &mut self,
+        inspect: &turtle::Inspect,
+        dig_func: fn(&'a turtle::Turt<'a>) -> anyhow::Result<turtle::Movement>,
+    ) {
+        if let Some(b) = inspect.block() {
+            if !self.avoid_other_turtles {
+                Self::ignore_err(dig_func(self.turt));
+            } else {
+                if b == "computercraft:turtle_normal" {
+                    let mut rng = rand::thread_rng();
+                    if rng.gen_range(0..2) == 0 {
+                        self.m_up();
+                        self.m_forw();
+                        self.m_down();
+                    }
+                } else {
+                    Self::ignore_err(dig_func(self.turt));
+                }
+            }
+        }
+    }
+
     pub fn m_forw(&mut self) {
         loop {
             match self.turt.i_forw() {
                 Ok(i) => {
-                    if i.block() {
-                        Self::ignore_err(self.turt.d_forw())
-                    }
+                    self.avoid_turtle(&i, turtle::Turt::d_forw);
                 }
                 Err(_) => continue,
             }
@@ -368,9 +395,7 @@ impl<'a> Nav<'a> {
         loop {
             match self.turt.i_up() {
                 Ok(i) => {
-                    if i.block() {
-                        Self::ignore_err(self.turt.d_up())
-                    }
+                    self.avoid_turtle(&i, turtle::Turt::d_up);
                 }
                 Err(_) => continue,
             }
@@ -391,9 +416,7 @@ impl<'a> Nav<'a> {
         loop {
             match self.turt.i_down() {
                 Ok(i) => {
-                    if i.block() {
-                        Self::ignore_err(self.turt.d_down())
-                    }
+                    self.avoid_turtle(&i, turtle::Turt::d_down);
                 }
                 Err(_) => continue,
             }

@@ -49,10 +49,16 @@ fn get_model(path: &str) -> (ArrayModel, (Vec3, Vec3)) {
 
 pub fn entry_point(turtleid: usize, chans: ClientChannels) {
     let turt = turtle::Turt::new(chans.0.clone(), &chans.1);
-    let mut nav = nav::Nav::new(turtleid, &turt, chans.0.clone(), &chans.1);
-
+    let mut nav = nav::Nav::new(true, turtleid, &turt, chans.0.clone(), &chans.1);
 
     nav.gps_init();
+
+    for i in 0..5 {
+        nav.m_forw()
+    }
+    turt.disconnect();
+    return;
+
 
     println!("Turtle: {turtleid}\tLOC {nav}");
 
