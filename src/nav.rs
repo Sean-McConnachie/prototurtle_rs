@@ -94,6 +94,12 @@ pub struct Pos {
     pub z: i64,
 }
 
+impl Pos {
+    pub fn new(x: i64, y: i64, z: i64) -> Self {
+        Self { x, y, z }
+    }
+}
+
 impl Into<Pos> for &PosH {
     fn into(self) -> Pos {
         Pos {

@@ -1,18 +1,23 @@
-use crate::scripts::{chunk_digger, silly_builder};
-use crate::{cmd, inventory, nav, turtle};
+use crate::{cmd, nav, turtle};
 use modelutils_rs::{float, model, model2arr, vec3::Vec3};
 
 use std::sync::mpsc;
-use rocket::log::private::warn;
-use crate::single_builder::control::BuildController;
+use modelutils_rs::model2arr::{ArrayModel, uint};
+use crate::multi_builder::MultiBuilder;
 
 const RESOLUTION: float = 100.0;
-const SIZE: usize = 50;
-const DIMS: (usize, usize, usize) = (SIZE, SIZE, SIZE);
+const SIZE: uint = 5;
+const DIMS: (uint, uint, uint) = (SIZE, SIZE, SIZE);
+const START_POS: nav::PosH = nav::PosH {
+    x: -2490,
+    y: 64,
+    z: -1032,
+    h: nav::Head::N,
+};
 
 pub type ClientChannels = (mpsc::Sender<String>, mpsc::Receiver<cmd::Resp>);
 
-fn get_model(path: &str) -> (Vec<Vec<Vec<bool>>>, (Vec3, Vec3)) {
+fn get_model(path: &str) -> (ArrayModel, (Vec3, Vec3)) {
     let (models, _materials) = modelutils_rs::load_default(path).unwrap();
     let mut models = models
         .into_iter()
@@ -33,7 +38,7 @@ fn get_model(path: &str) -> (Vec<Vec<Vec<bool>>>, (Vec3, Vec3)) {
         // Convert to array
         return (model2arr::model_2_arr(model, DIMS, RESOLUTION), dims);
     }
-    return (vec![], (Vec3::ZERO, Vec3::ZERO));
+    panic!()
 }
 
 pub fn entry_point(turtleid: usize, chans: ClientChannels) {
@@ -47,8 +52,9 @@ pub fn entry_point(turtleid: usize, chans: ClientChannels) {
 
     let (blocks, dims) = get_model("shapes/rotated_puppet.obj");
 
-    let mut controller = BuildController::new(blocks, turtleid, &turt, &mut nav);
-    controller.run();
+    let nodes = MultiBuilder::get_nodes(blocks);
+    let mut controller = MultiBuilder::new(START_POS, turtleid, &turt, &mut nav);
+    controller.run(nodes);
 
     turt.disconnect();
 }
