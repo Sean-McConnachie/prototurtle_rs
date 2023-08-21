@@ -1,4 +1,3 @@
-use std::arch::x86_64::_mm_sha1msg1_epu32;
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::path;
@@ -14,51 +13,68 @@ fn cost(a: CoordXZ, b: CoordXZ) -> uint {
     (dx + dz + 1) as u16
 }
 
-pub fn mst_from_nodes(mut nodes: Vec<(CoordXZ, Block)>) -> HashMap<CoordXZ, (Block, Vec<CoordXZ>)> {
-    let mut edges: Vec<(CoordXZ, CoordXZ, u16)> = Vec::new();
-    for i in 0..nodes.len() {
-        for j in i + 1..nodes.len() {
+type Node = uint;
+type Cost = uint;
+type Edge = (Node, Node, Cost);
+
+fn find_parent(parents: &mut Vec<Node>, node: Node) -> Node {
+    if parents[node as usize] == node {
+        node
+    } else {
+        parents[node as usize] = find_parent(parents, parents[node as usize]);
+        parents[node as usize]
+    }
+}
+
+fn union(parents: &mut Vec<Node>, node_a: Node, node_b: Node) {
+    let parent_a = find_parent(parents, node_a);
+    let parent_b = find_parent(parents, node_b);
+    if parent_a == parent_b { return; }
+    parents[parent_a as usize] = parent_b;
+}
+
+pub fn nodes_to_mst_to_path(nodes: &Vec<(CoordXZ, Block)>) -> Vec<uint> {
+    // Kruskal MST
+    let n = nodes.len();
+    let mut edges: Vec<Edge> = Vec::with_capacity(n * n);
+    for i in 0..n {
+        for j in i + 1..n {
             let (node_a, _block_a) = nodes[i];
             let (node_b, _block_b) = nodes[j];
-            let cost = cost(node_a, node_b);
-            edges.push((node_a, node_b, cost));
+            let cost: Cost = cost(node_a, node_b);
+            edges.push((i as Node, j as Node, cost));
         }
     }
     edges.sort_by_key(|&(_, _, cost)| cost);
 
-    let mut parent: HashMap<CoordXZ, CoordXZ> = HashMap::new();
-    for (node, _block) in &nodes {
-        parent.insert(*node, *node);
-    }
+    let mut parents: Vec<Node> = (0..n).into_iter().map(|u| u as Node).collect();
+    let mut adj_list: Vec<Vec<Node>> = (0..n).into_iter().map(|_| Vec::new()).collect();
 
-    fn find(mut node: CoordXZ, parent: &mut HashMap<CoordXZ, CoordXZ>) -> CoordXZ {
-        while parent[&node] != node {
-            node = parent[&node];
-        }
-        node
-    }
-
-    let mut minimum_spanning_tree: HashMap<CoordXZ, (Block, Vec<CoordXZ>)> = HashMap::new();
     for (node_a, node_b, cost) in edges {
-        let root_a = find(node_a, &mut parent);
-        let root_b = find(node_b, &mut parent);
-        if root_a != root_b {
-            // Update the adjacency list for the parent node
-            minimum_spanning_tree.entry(root_a).or_insert(
-                (Block::MIN, Vec::new())
-            ).1.push(node_b);
-
-            parent.insert(root_a, root_b);
+        if find_parent(&mut parents, node_a) != find_parent(&mut parents, node_b) {
+            union(&mut parents, node_a, node_b);
+            adj_list[node_a as usize].push(node_b);
         }
     }
 
-    for (node, (block, _)) in minimum_spanning_tree.iter_mut() {
-        if let Some((_original_node, original_block)) = nodes.iter().find(|(n, _)| *n == *node) {
-            *block = *original_block;
+    // DFS Path
+    let mut stack: Vec<Node> = Vec::new();
+    let mut visited: Vec<bool> = (0..n).into_iter().map(|_| false).collect();
+    let mut path: Vec<uint> = Vec::with_capacity(n - 1);
+
+    stack.push(0);
+    while !stack.is_empty() {
+        let node = stack.pop().unwrap();
+        if !visited[node as usize] {
+            visited[node as usize] = true;
+            for child in adj_list[node as usize].iter() {
+                stack.push(*child);
+                path.push(*child);
+            }
         }
     }
 
-    minimum_spanning_tree
+    path
 }
 
 fn mst_to_path(mst: HashMap<CoordXZ, (Block, Vec<CoordXZ>)>) -> Vec<(Block, CoordXZ)> {
@@ -169,10 +185,6 @@ impl<'a> MultiBuilder<'a> {
             }
         }
 
-        fn relative_coord(start: &nav::PosH, coord: &nav::PosH) -> CoordXZ {
-            ((coord.x - start.x) as uint, (coord.z - start.z) as uint)
-        }
-
         let mut blocks_placed = 0;
 
         for (y, layer) in nodes
@@ -182,12 +194,11 @@ impl<'a> MultiBuilder<'a> {
             self.start_layer = y;
             self.save_progress();
 
-            let rel_coord = relative_coord(&self.start_pos, self.nav.pos());
-            let mst = mst_from_nodes(layer);
-            let path = mst_to_path(mst);
+            let path = nodes_to_mst_to_path(&layer);
 
-            for (_block, coord) in path {
-                self.nav.goto_nohead(&world_coord(&self.start_pos, coord, y), nav::Order::YXZ);
+            for node  in path {
+                let (coord, block) = layer[node as usize];
+                self.nav.goto_nohead(&world_coord(&self.start_pos, coord, y), nav::Order::XYZ);
                 self.turt.inv_select(((blocks_placed / 64) % 16) as u8);
                 self.turt.p_down();
             }

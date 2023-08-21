@@ -18,6 +18,12 @@ const START_POS: nav::PosH = nav::PosH {
 pub type ClientChannels = (mpsc::Sender<String>, mpsc::Receiver<cmd::Resp>);
 
 fn get_model(path: &str) -> (ArrayModel, (Vec3, Vec3)) {
+    let box_scale = Vec3::new(
+        DIMS.0 as float - 1.0,
+        DIMS.1 as float - 1.0,
+        DIMS.2 as float - 1.0,
+    );
+
     let (models, _materials) = modelutils_rs::load_default(path).unwrap();
     let mut models = models
         .into_iter()
@@ -31,7 +37,7 @@ fn get_model(path: &str) -> (ArrayModel, (Vec3, Vec3)) {
         let bounds = model.model_dims();
         model.mv(bounds.0 * Vec3::from_scalar(-1.0));
         // Scale model to fit in 10x10x10 cube
-        let scale = model.scale_for_box(Vec3::new(DIMS.0 as float, DIMS.1 as float, DIMS.2 as float));
+        let scale = model.scale_for_box(box_scale);
         model.scale(Vec3::from_scalar(scale.min_val()));
 
         let dims = model.model_dims();
@@ -50,7 +56,7 @@ pub fn entry_point(turtleid: usize, chans: ClientChannels) {
 
     println!("Turtle: {turtleid}\tLOC {nav}");
 
-    let (blocks, dims) = get_model("shapes/rotated_puppet.obj");
+    let (blocks, dims) = get_model("shapes/cube.obj");
 
     let nodes = MultiBuilder::get_nodes(blocks);
     let mut controller = MultiBuilder::new(START_POS, turtleid, &turt, &mut nav);
