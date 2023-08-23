@@ -1,10 +1,19 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::path;
-use modelutils_rs::model2arr::{ArrayModel, Block, CoordXZ, int, uint};
+use modelutils_rs::float;
+use modelutils_rs::model2arr::{ArrayModel, Block, CoordXYZ, CoordXZ, int, uint};
+use rand::Rng;
 use crate::{turtle, nav, inventory};
 
-fn cost(a: CoordXZ, b: CoordXZ) -> uint {
+
+fn euclideanf_xz(a: &CoordXZ, b: &CoordXZ) -> float {
+    let dx = a.0 as float - b.0 as float;
+    let dy = a.1 as float - b.1 as float;
+    (dx * dx + dy * dy).sqrt()
+}
+
+fn manhatten_turtle(a: CoordXZ, b: CoordXZ) -> uint {
     let dx = (a.0 as int - b.0 as int).abs();
     let dz = (a.1 as int - b.1 as int).abs();
     if dx == 0 || dz == 0 {
@@ -12,6 +21,58 @@ fn cost(a: CoordXZ, b: CoordXZ) -> uint {
     }
     (dx + dz + 1) as u16
 }
+
+pub type Centroid = (CoordXZ, usize);
+
+pub fn k_means(model_arr: Vec<Vec<(CoordXZ, Block)>>, dims: (uint, uint, uint), k: usize) -> Vec<Centroid> {
+    let mut rng = rand::thread_rng();
+    let mut centroids: Vec<Centroid> = (0..k)
+        .map(|_| {
+            let row_idx = rng.gen_range(0..dims.0);
+            let col_idx = rng.gen_range(0..dims.2);
+            let point = model_arr[row_idx as usize][col_idx as usize].0;
+            (point, 0)
+        })
+        .collect();
+
+    // K-means
+    const MAX_ITER: usize = 100;
+    for _i in 0..MAX_ITER {
+        let mut centroid_sums: Vec<((usize, usize), usize)> = (0..k)
+            .map(|_| ((0, 0), 0))
+            .collect();
+
+        for layer in &model_arr {
+            for (point, _block) in layer {
+                let mut min_distance = float::MAX;
+                let mut closest_cluster = 0;
+
+                for (i, ((x, z), _c)) in centroids.iter().enumerate() {
+                    let distance = euclideanf_xz(&point, &(*x as uint, *z as uint));
+                    if distance < min_distance {
+                        min_distance = distance;
+                        closest_cluster = i;
+                    }
+                }
+
+                centroid_sums[closest_cluster].0.0 += point.0 as usize;
+                centroid_sums[closest_cluster].0.1 += point.1 as usize;
+                centroid_sums[closest_cluster].1 += 1;
+            }
+        }
+
+        // Update centroids
+        for (i, ((x, z), count)) in centroid_sums.iter_mut().enumerate() {
+            if *count == 0 { continue; }
+            let centroid = &mut centroids[i];
+
+            *centroid = (((*x / *count) as uint, (*z / *count) as uint), *count);
+        }
+    }
+
+    centroids
+}
+
 
 type Node = uint;
 type Cost = uint;
@@ -41,7 +102,7 @@ fn nodes_to_mst_to_path(nodes: &Vec<(CoordXZ, Block)>) -> Vec<uint> {
         for j in i + 1..n {
             let (node_a, _block_a) = nodes[i];
             let (node_b, _block_b) = nodes[j];
-            let cost: Cost = cost(node_a, node_b);
+            let cost: Cost = manhatten_turtle(node_a, node_b);
             edges.push((i as Node, j as Node, cost));
         }
     }

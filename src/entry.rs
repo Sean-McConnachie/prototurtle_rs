@@ -3,10 +3,10 @@ use modelutils_rs::{float, model, model2arr, vec3::Vec3};
 
 use std::sync::mpsc;
 use modelutils_rs::model2arr::{ArrayModel, uint};
-use crate::multi_builder::MultiBuilder;
+use crate::multi_builder::{k_means, MultiBuilder};
 
 const RESOLUTION: float = 100.0;
-const SIZE: uint = 5;
+const SIZE: uint = 50;
 const DIMS: (uint, uint, uint) = (SIZE, SIZE, SIZE);
 const START_POS: nav::PosH = nav::PosH {
     x: -2490,
@@ -53,22 +53,21 @@ pub fn entry_point(turtleid: usize, chans: ClientChannels) {
 
     nav.gps_init();
 
-    for i in 0..5 {
-        nav.m_forw()
-    }
-    turt.disconnect();
-    return;
-
-
     println!("Turtle: {turtleid}\tLOC {nav}");
 
     let (blocks, dims) = get_model("shapes/cube.obj");
 
     let nodes = MultiBuilder::get_nodes(blocks);
-    let mut controller = MultiBuilder::new(START_POS, turtleid, &turt, &mut nav);
-    controller.run(nodes);
 
+    let nodes = k_means(nodes, DIMS, 3);
+    println!("{:?}", &nodes);
     turt.disconnect();
+    return;
+
+    // let mut controller = MultiBuilder::new(START_POS, turtleid, &turt, &mut nav);
+    // controller.run(nodes);
+    //
+    // turt.disconnect();
 }
 
 
