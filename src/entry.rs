@@ -3,15 +3,21 @@ use modelutils_rs::{float, model, model2arr, vec3::Vec3};
 
 use std::sync::mpsc;
 use modelutils_rs::model2arr::{ArrayModel, uint};
-use crate::multi_builder::{k_means, MultiBuilder};
+use crate::multi_builder::{centroids_to_groupings, k_means, MultiBuilder};
+
+
+const ACTIVE_TURTLES: &[usize] = &[
+    9,
+    10
+];
 
 const RESOLUTION: float = 100.0;
-const SIZE: uint = 50;
+const SIZE: uint = 5;
 const DIMS: (uint, uint, uint) = (SIZE, SIZE, SIZE);
 const START_POS: nav::PosH = nav::PosH {
-    x: -2490,
+    x: -2689,
     y: 64,
-    z: -1032,
+    z: -1301,
     h: nav::Head::N,
 };
 
@@ -25,7 +31,7 @@ fn get_model(path: &str) -> (ArrayModel, (Vec3, Vec3)) {
     );
 
     let (models, _materials) = modelutils_rs::load_default(path).unwrap();
-    let mut models = models
+    let models = models
         .into_iter()
         .map(|m| model::Model::new(
             model::Points::from_flat_vec(m.mesh.positions),
@@ -47,7 +53,22 @@ fn get_model(path: &str) -> (ArrayModel, (Vec3, Vec3)) {
     panic!()
 }
 
+fn id_to_i(turtleid: usize) -> usize {
+    let mut v = None;
+    for (i, t_id) in ACTIVE_TURTLES.iter().enumerate() {
+        if t_id == &turtleid {
+            v = Some(i);
+            break;
+        }
+    }
+    match v {
+        Some(v) => v,
+        None => panic!("Rip."),
+    }
+}
+
 pub fn entry_point(turtleid: usize, chans: ClientChannels) {
+    let id = id_to_i(turtleid);
     let turt = turtle::Turt::new(chans.0.clone(), &chans.1);
     let mut nav = nav::Nav::new(true, turtleid, &turt, chans.0.clone(), &chans.1);
 
@@ -55,19 +76,19 @@ pub fn entry_point(turtleid: usize, chans: ClientChannels) {
 
     println!("Turtle: {turtleid}\tLOC {nav}");
 
-    let (blocks, dims) = get_model("shapes/cube.obj");
+    let (blocks, _dims) = get_model("shapes/cube.obj");
 
     let nodes = MultiBuilder::get_nodes(blocks);
+    let centroids = k_means(&nodes, DIMS, ACTIVE_TURTLES.len());
+    let nodes = centroids_to_groupings(nodes, centroids);
+    // println!("{:?}", &nodes[id] );
+    // println!("{}", nodes[id].0.len());
+    let nodes = &nodes[id];
 
-    let nodes = k_means(nodes, DIMS, 3);
-    println!("{:?}", &nodes);
+    let mut controller = MultiBuilder::new(id, START_POS, turtleid, &turt, &mut nav);
+    controller.run(&nodes.0, nodes.1);
+
     turt.disconnect();
-    return;
-
-    // let mut controller = MultiBuilder::new(START_POS, turtleid, &turt, &mut nav);
-    // controller.run(nodes);
-    //
-    // turt.disconnect();
 }
 
 

@@ -30,7 +30,7 @@ impl SimpleSearcher {
 
     fn calc_heuristic(nodes: &Vec<CoordXZ>) -> Vec<Vec<usize>> {
         let mut heuristic= Vec::with_capacity(nodes.len());
-        for (i, node) in nodes.iter().enumerate() {
+        for (_i, node) in nodes.iter().enumerate() {
             // heuristic.push(vec![0; nodes.len()]);
             let mut row = Vec::with_capacity(nodes.len());
             for (j, other_node) in nodes.iter().enumerate() {

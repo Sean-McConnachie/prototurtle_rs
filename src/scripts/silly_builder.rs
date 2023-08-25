@@ -43,6 +43,7 @@ impl<'a> SillyBuilder<'a> {
         }
     }
 
+    #[allow(dead_code)]
     fn inv_check(&mut self) {
         self.inv.full_update();
         if self.inv.is_full() {
@@ -164,7 +165,7 @@ impl<'a> SillyBuilder<'a> {
                         _ => panic!(),
                     }
 
-                    let mut block = self.blocks[x][y][z].clone();
+                    let block = self.blocks[x][y][z].clone();
                     if block {
                         self.nav.goto_head(&p, nav::Order::XYZ);
                         if blocks_placed % 64 == 0 {

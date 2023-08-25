@@ -1,6 +1,6 @@
 use crate::{cmd, turtle};
 
-const MAX_TURTLE_WAIT_MILLIS: u64 = 5000;
+// const MAX_TURTLE_WAIT_MILLIS: u64 = 5000;
 
 use rand::Rng;
 use rocket::serde::json::Value;
@@ -439,8 +439,8 @@ impl<'a> Nav<'a> {
     }
 
     pub fn goto_nohead(&mut self, dst: &Pos, order: Order) {
-        let order = order.order_arr();
-        for d in order.0..=order.2 {
+        let order_arr = order.order_arr();
+        for d in order_arr.0..=order_arr.2 {
             match d {
                 'x' => {
                     if self.p.x < dst.x {
@@ -474,6 +474,11 @@ impl<'a> Nav<'a> {
                     }
                 }
                 _ => panic!(),
+            }
+        }
+        if self.avoid_other_turtles {
+            if self.p.x != dst.x || self.p.y != dst.y || self.p.z != dst.z {
+                self.goto_nohead(&dst, order);
             }
         }
     }

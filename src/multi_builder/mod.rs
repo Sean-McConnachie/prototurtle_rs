@@ -1,11 +1,13 @@
-use std::collections::{HashMap, HashSet};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path;
 use modelutils_rs::float;
-use modelutils_rs::model2arr::{ArrayModel, Block, CoordXYZ, CoordXZ, int, uint};
+use modelutils_rs::model2arr::{ArrayModel, Block, CoordXZ, int, uint};
 use rand::Rng;
-use crate::{turtle, nav, inventory};
+use crate::{turtle, nav};
 
+const CHEST_INV: usize = 27;
+const TURT_INV: usize = 16;
+const SLOT_SIZE: usize = 64;
 
 fn euclideanf_xz(a: &CoordXZ, b: &CoordXZ) -> float {
     let dx = a.0 as float - b.0 as float;
@@ -22,9 +24,35 @@ fn manhatten_turtle(a: CoordXZ, b: CoordXZ) -> uint {
     (dx + dz + 1) as u16
 }
 
+pub fn centroids_to_groupings(nodes: Vec<Vec<(CoordXZ, Block)>>, centroids: Vec<Centroid>) -> Vec<(Vec<Vec<(CoordXZ, Block)>>, usize)> {
+    let mut groupings: Vec<(Vec<Vec<(CoordXZ, Block)>>, usize)> = (0..centroids.len())
+        .map(|c| (vec![vec![]; nodes[c].len()], 0))
+        .collect();
+
+    for (li, layer) in nodes.iter().enumerate() {
+        for (point, block) in layer {
+            let mut min_distance = float::MAX;
+            let mut closest_cluster = 0;
+
+            for (i, ((x, z), _c)) in centroids.iter().enumerate() {
+                let distance = euclideanf_xz(&point, &(*x as uint, *z as uint));
+                if distance < min_distance {
+                    min_distance = distance;
+                    closest_cluster = i;
+                }
+            }
+
+            groupings[closest_cluster].1 += 1;
+            groupings[closest_cluster].0[li].push((*point, *block));
+        }
+    }
+
+    groupings
+}
+
 pub type Centroid = (CoordXZ, usize);
 
-pub fn k_means(model_arr: Vec<Vec<(CoordXZ, Block)>>, dims: (uint, uint, uint), k: usize) -> Vec<Centroid> {
+pub fn k_means(model_arr: &Vec<Vec<(CoordXZ, Block)>>, dims: (uint, uint, uint), k: usize) -> Vec<Centroid> {
     let mut rng = rand::thread_rng();
     let mut centroids: Vec<Centroid> = (0..k)
         .map(|_| {
@@ -42,7 +70,7 @@ pub fn k_means(model_arr: Vec<Vec<(CoordXZ, Block)>>, dims: (uint, uint, uint), 
             .map(|_| ((0, 0), 0))
             .collect();
 
-        for layer in &model_arr {
+        for layer in model_arr {
             for (point, _block) in layer {
                 let mut min_distance = float::MAX;
                 let mut closest_cluster = 0;
@@ -111,7 +139,7 @@ fn nodes_to_mst_to_path(nodes: &Vec<(CoordXZ, Block)>) -> Vec<uint> {
     let mut parents: Vec<Node> = (0..n).into_iter().map(|u| u as Node).collect();
     let mut adj_list: Vec<Vec<Node>> = (0..n).into_iter().map(|_| Vec::new()).collect();
 
-    for (node_a, node_b, cost) in edges {
+    for (node_a, node_b, _cost) in edges {
         if find_parent(&mut parents, node_a) != find_parent(&mut parents, node_b) {
             union(&mut parents, node_a, node_b);
             adj_list[node_a as usize].push(node_b);
@@ -140,9 +168,9 @@ fn nodes_to_mst_to_path(nodes: &Vec<(CoordXZ, Block)>) -> Vec<uint> {
 
 pub struct MultiBuilder<'a> {
     // Used for controlling the turtle
+    turt_i: usize,
     turt: &'a turtle::Turt<'a>,
     nav: &'a mut nav::Nav<'a>,
-    inv: inventory::Inventory<'a>,
 
     // Build data must be kept in function parameter
 
@@ -150,21 +178,24 @@ pub struct MultiBuilder<'a> {
     start_pos: nav::PosH,
     start_layer: usize,
     total_blocks: usize,
+    stack_count: usize,
     fp: path::PathBuf,
 }
 
 impl<'a> MultiBuilder<'a> {
     pub fn new(
+        turt_i: usize,
         start_pos: nav::PosH,
         turtle_id: usize,
         turt: &'a turtle::Turt<'a>,
         nav: &'a mut nav::Nav<'a>,
     ) -> Self {
         Self {
+            turt_i,
             start_pos,
             turt,
+            stack_count: 0,
             nav,
-            inv: inventory::Inventory::init(&turt),
 
             start_layer: 0,
             total_blocks: 0,
@@ -208,7 +239,73 @@ impl<'a> MultiBuilder<'a> {
         file.write_all(format!("{}\n{}\n", self.start_layer, self.total_blocks).as_bytes()).unwrap();
     }
 
-    pub fn run(&mut self, nodes: Vec<Vec<(CoordXZ, Block)>>) {
+    pub fn update_inv(&mut self, blocks_placed: usize) {
+        if blocks_placed % 64 == 0 {
+            let slot = (blocks_placed / 64) % 16;
+            if slot == 0 {
+                let mut chest_loc = self.start_pos.clone();
+                self.stack_count += TURT_INV;
+                let offset = ((self.stack_count as f32 / TURT_INV as f32) / CHEST_INV as f32) as i64;
+                let max_chest_space = CHEST_INV - ((self.stack_count - TURT_INV) % CHEST_INV);
+
+                self.nav.goto_nohead(&nav::Pos {
+                    x: chest_loc.x + self.turt_i as i64,
+                    y: chest_loc.y,
+                    z: chest_loc.z - offset,
+                }, nav::Order::XYZ);
+
+                for i in 0..TURT_INV {
+                    self.turt.inv_select(i as u8);
+                    self.turt.suck_down();
+                }
+
+                if max_chest_space < TURT_INV {
+                    chest_loc.z -= 1;
+                    self.nav.goto_head(&chest_loc, nav::Order::XYZ);
+
+                    for i in max_chest_space..TURT_INV {
+                        self.turt.inv_select(i as u8);
+                        self.turt.suck_down();
+                    }
+                }
+
+                self.nav.goto_head(&chest_loc, nav::Order::XYZ);
+            }
+            self.turt.inv_select(((blocks_placed / 64) % 16) as u8);
+        }
+    }
+
+    pub fn run(&mut self, nodes: &Vec<Vec<(CoordXZ, Block)>>, count: usize) {
+        let num_chests = (count as f32 / SLOT_SIZE as f32 / CHEST_INV as f32).ceil() as usize;
+        let need_more_chests = match self.turt.inv_item_detail(0) {
+            Some(chests) => {
+                if chests.count() < num_chests as i32 {
+                    true
+                } else {
+                    false
+                }
+            }
+            None => true,
+        };
+
+        if need_more_chests {
+            println!("Not enough chests! Need at least: {}", num_chests);
+            std::thread::sleep(std::time::Duration::from_millis(10000));
+            return;
+        }
+
+        for i in 0..num_chests {
+            self.nav.goto_nohead(&nav::Pos::new(
+                self.start_pos.x + self.turt_i as i64,
+                self.start_pos.y,
+                self.start_pos.z - i as i64,
+            ), nav::Order::XYZ);
+            self.turt.inv_select(0);
+            self.turt.d_down();
+            self.turt.p_down();
+        }
+
+
         fn world_coord(start: &nav::PosH, coord: CoordXZ, y: usize) -> nav::Pos {
             nav::Pos {
                 x: start.x + coord.0 as i64,
@@ -219,8 +316,10 @@ impl<'a> MultiBuilder<'a> {
 
         let mut blocks_placed = 0;
 
-        for (y, layer) in nodes
-            .into_iter().rev().skip(self.start_layer).enumerate() {
+        for y in (0..nodes.len()).rev() {
+            let layer = &nodes[y];
+            // for (y, layer) in nodes.reverse()
+            //     .into_iter().rev().skip(self.start_layer).enumerate() {
             if layer.is_empty() { continue; }
 
             self.start_layer = y;
@@ -229,10 +328,13 @@ impl<'a> MultiBuilder<'a> {
             let path = nodes_to_mst_to_path(&layer);
 
             for node in path {
-                let (coord, block) = layer[node as usize];
+                let (coord, _block) = layer[node as usize];
                 self.nav.goto_nohead(&world_coord(&self.start_pos, coord, y), nav::Order::XYZ);
-                self.turt.inv_select(((blocks_placed / 64) % 16) as u8);
-                self.turt.p_down();
+                self.turt.p_up();
+
+                self.update_inv(blocks_placed);
+                self.turt.p_up();
+                blocks_placed += 1;
             }
         }
     }

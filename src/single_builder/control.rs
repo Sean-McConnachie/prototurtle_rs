@@ -1,4 +1,4 @@
-use crate::{turtle, nav, inventory};
+use crate::{turtle, nav, };
 
 use super::simple_searcher::SimpleSearcher;
 
@@ -11,7 +11,7 @@ pub struct BuildController<'a> {
 
     turt: &'a turtle::Turt<'a>,
     nav: &'a mut nav::Nav<'a>,
-    inv: inventory::Inventory<'a>,
+    // inv: inventory::Inventory<'a>,
 
     start_pos: nav::PosH,
 
@@ -25,7 +25,7 @@ impl<'a> BuildController<'a> {
             model,
             turt,
             nav,
-            inv: inventory::Inventory::init(&turt),
+            // inv: inventory::Inventory::init(&turt),
             stack_count: 0,
             blocks_placed: 0,
             start_pos: nav::PosH::default(),
