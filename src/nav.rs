@@ -448,17 +448,17 @@ impl<'a> Nav<'a> {
                     } else if self.p.x > dst.x {
                         self.t_head(Head::W);
                     }
-                    while self.p.x != dst.x {
+                    for _ in 0..(self.p.x - dst.x).abs() as usize {
                         self.m_forw();
                     }
                 }
                 'y' => {
                     if self.p.y < dst.y {
-                        while self.p.y != dst.y {
+                        for _ in 0..(self.p.y - dst.y).abs() as usize {
                             self.m_up()
                         }
                     } else if self.p.y > dst.y {
-                        while self.p.y != dst.y {
+                        for _ in 0..(self.p.y - dst.y).abs() as usize {
                             self.m_down()
                         }
                     };
@@ -469,7 +469,7 @@ impl<'a> Nav<'a> {
                     } else if self.p.z > dst.z {
                         self.t_head(Head::N);
                     }
-                    while self.p.z != dst.z {
+                    for _ in 0..(self.p.z - dst.z).abs() as usize {
                         self.m_forw();
                     }
                 }

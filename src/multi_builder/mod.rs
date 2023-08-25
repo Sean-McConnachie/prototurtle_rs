@@ -1,9 +1,11 @@
 use std::io::Write;
 use std::path;
+use rand::SeedableRng;
 use modelutils_rs::float;
 use modelutils_rs::model2arr::{ArrayModel, Block, CoordXZ, int, uint};
+use rand::prelude::StdRng;
 use rand::Rng;
-use crate::{turtle, nav};
+use crate::{turtle, nav, inventory};
 
 const CHEST_INV: usize = 27;
 const TURT_INV: usize = 16;
@@ -53,7 +55,9 @@ pub fn centroids_to_groupings(nodes: Vec<Vec<(CoordXZ, Block)>>, centroids: Vec<
 pub type Centroid = (CoordXZ, usize);
 
 pub fn k_means(model_arr: &Vec<Vec<(CoordXZ, Block)>>, dims: (uint, uint, uint), k: usize) -> Vec<Centroid> {
-    let mut rng = rand::thread_rng();
+    // let mut rng = rand::thread_rng();
+    let mut rng = StdRng::seed_from_u64(0);
+
     let mut centroids: Vec<Centroid> = (0..k)
         .map(|_| {
             let row_idx = rng.gen_range(0..dims.0);
@@ -171,6 +175,7 @@ pub struct MultiBuilder<'a> {
     turt_i: usize,
     turt: &'a turtle::Turt<'a>,
     nav: &'a mut nav::Nav<'a>,
+    inv: inventory::Inventory<'a>,
 
     // Build data must be kept in function parameter
 
@@ -196,6 +201,7 @@ impl<'a> MultiBuilder<'a> {
             turt,
             stack_count: 0,
             nav,
+            inv: inventory::Inventory::init(&turt),
 
             start_layer: 0,
             total_blocks: 0,
@@ -244,15 +250,14 @@ impl<'a> MultiBuilder<'a> {
             let slot = (blocks_placed / 64) % 16;
             if slot == 0 {
                 let mut chest_loc = self.start_pos.clone();
+                chest_loc.x += self.turt_i as i64;
+
                 self.stack_count += TURT_INV;
                 let offset = ((self.stack_count as f32 / TURT_INV as f32) / CHEST_INV as f32) as i64;
                 let max_chest_space = CHEST_INV - ((self.stack_count - TURT_INV) % CHEST_INV);
 
-                self.nav.goto_nohead(&nav::Pos {
-                    x: chest_loc.x + self.turt_i as i64,
-                    y: chest_loc.y,
-                    z: chest_loc.z - offset,
-                }, nav::Order::XYZ);
+                chest_loc.z -= offset;
+                self.nav.goto_head(&chest_loc, nav::Order::XYZ);
 
                 for i in 0..TURT_INV {
                     self.turt.inv_select(i as u8);
@@ -268,16 +273,19 @@ impl<'a> MultiBuilder<'a> {
                         self.turt.suck_down();
                     }
                 }
-
-                self.nav.goto_head(&chest_loc, nav::Order::XYZ);
+                self.inv.full_update();
+                while !self.inv.is_full() {
+                    std::thread::sleep(std::time::Duration::from_millis(10000));
+                    println!("Refill turtle: {}", self.turt_i)
+                }
             }
-            self.turt.inv_select(((blocks_placed / 64) % 16) as u8);
+            self.turt.inv_select(slot as u8);
         }
     }
 
     pub fn run(&mut self, nodes: &Vec<Vec<(CoordXZ, Block)>>, count: usize) {
         let num_chests = (count as f32 / SLOT_SIZE as f32 / CHEST_INV as f32).ceil() as usize;
-        let need_more_chests = match self.turt.inv_item_detail(0) {
+        let mut need_more_chests = match self.turt.inv_item_detail(0) {
             Some(chests) => {
                 if chests.count() < num_chests as i32 {
                     true
@@ -288,10 +296,14 @@ impl<'a> MultiBuilder<'a> {
             None => true,
         };
 
+        if !self.start_layer == 0 {
+            need_more_chests = true;
+        }
+
         if need_more_chests {
             println!("Not enough chests! Need at least: {}", num_chests);
             std::thread::sleep(std::time::Duration::from_millis(10000));
-            return;
+            // return;
         }
 
         for i in 0..num_chests {
@@ -316,7 +328,7 @@ impl<'a> MultiBuilder<'a> {
 
         let mut blocks_placed = 0;
 
-        for y in (0..nodes.len()).rev() {
+        for y in (self.start_layer..nodes.len()).rev() {
             let layer = &nodes[y];
             // for (y, layer) in nodes.reverse()
             //     .into_iter().rev().skip(self.start_layer).enumerate() {
@@ -328,11 +340,12 @@ impl<'a> MultiBuilder<'a> {
             let path = nodes_to_mst_to_path(&layer);
 
             for node in path {
+                self.update_inv(blocks_placed);
+
                 let (coord, _block) = layer[node as usize];
                 self.nav.goto_nohead(&world_coord(&self.start_pos, coord, y), nav::Order::XYZ);
                 self.turt.p_up();
 
-                self.update_inv(blocks_placed);
                 self.turt.p_up();
                 blocks_placed += 1;
             }

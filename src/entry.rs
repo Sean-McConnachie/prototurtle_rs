@@ -1,5 +1,5 @@
 use crate::{cmd, nav, turtle};
-use modelutils_rs::{float, model, model2arr, vec3::Vec3};
+use modelutils_rs::{coords, DEG2RAD, float, model, model2arr, vec3::Vec3};
 
 use std::sync::mpsc;
 use modelutils_rs::model2arr::{ArrayModel, uint};
@@ -7,17 +7,24 @@ use crate::multi_builder::{centroids_to_groupings, k_means, MultiBuilder};
 
 
 const ACTIVE_TURTLES: &[usize] = &[
+    4,
     9,
-    10
+    // 10,
+    // 11,
+    // 12,
+    // 18,
+    // 19,
+    // 20,
+    // 21
 ];
 
 const RESOLUTION: float = 100.0;
 const SIZE: uint = 5;
 const DIMS: (uint, uint, uint) = (SIZE, SIZE, SIZE);
 const START_POS: nav::PosH = nav::PosH {
-    x: -2689,
-    y: 64,
-    z: -1301,
+    x: -2334,
+    y: 65,
+    z: -1061,
     h: nav::Head::N,
 };
 
@@ -39,6 +46,7 @@ fn get_model(path: &str) -> (ArrayModel, (Vec3, Vec3)) {
         ))
         .collect::<Vec<model::Model>>();
     for mut model in models.into_iter() {
+        model.rotate(Vec3::new(0.0, 0.0, 90.0 * DEG2RAD), coords::Order::XYZ);
         // Align model to origin
         let bounds = model.model_dims();
         model.mv(bounds.0 * Vec3::from_scalar(-1.0));
