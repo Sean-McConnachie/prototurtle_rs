@@ -1,4 +1,4 @@
-use crate::{DefaultData, PROGRESS_DIR};
+use crate::{DefaultData, PROGRESS_DIR, TurtleIdentifier};
 use crate::turtle_core::control::TurtControl;
 use crate::turtle_core::navigation::{Head, Pos, PosH, TurtNavigation};
 use crate::turtle_core::inventory::{TurtInventory, TURT_SLOTS, TurtBlock};
@@ -54,7 +54,7 @@ impl FStore for FStoreChunkDigger {
 
 #[derive(Debug)]
 pub struct ChunkDigger<'a> {
-    _identifier: String,
+    _identifier: TurtleIdentifier,
     _index: usize,
     turt: &'a TurtControl<'a>,
     nav: &'a mut TurtNavigation<'a>,

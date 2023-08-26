@@ -1,8 +1,7 @@
-use prototurtle_rs::scripts::model_builder::generation::other::{example_generation, groupings_to_arr, load_obj_to_arr};
-use prototurtle_rs::server;
+use prototurtle_rs::{init_dirs, server};
 
 #[tokio::main]
 pub async fn main() {
-    load_obj_to_arr("assets/octo.obj");
-    // server::run().await;
+    init_dirs();
+    server::run().await;
 }

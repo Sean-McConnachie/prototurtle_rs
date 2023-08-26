@@ -420,7 +420,7 @@ pub mod other {
 
             let nodes = array_model_to_nodes(arr3d);
             // let joined = join_paths_greedily((0, 0), paths, &nodes);
-            let centroids = k_means(&nodes, DIMS, 9);
+            let centroids = k_means(&nodes, DIMS, 15);
             let groupings = centroids_to_groupings(nodes, centroids, DIMS);
             let coords = CoordsExport::from_groupings(groupings);
             let coords = serde_json::to_string(&coords).unwrap();

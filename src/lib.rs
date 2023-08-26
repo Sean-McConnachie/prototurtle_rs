@@ -3,7 +3,7 @@ pub mod server;
 pub mod scripts;
 pub mod entry;
 
-pub type TurtleIdentifier = String;
+pub type TurtleIdentifier = usize;
 pub type TurtleIndex = usize;
 pub type DefaultData<'a> = (
     TurtleIdentifier,

@@ -74,7 +74,7 @@ async fn register(bot_net: &State<BotNet>, turtleid: usize) {
     println!("Turtle {turtleid} is trying to register!");
     let channels_client = bot_net.register_turtle(turtleid);
     thread::spawn(move || {
-        entry::turtle_registered(turtleid.to_string(), channels_client)
+        entry::turtle_registered(turtleid.into(), channels_client)
     });
 }
 
