@@ -43,6 +43,14 @@ mod inventory {
         pub fn name(&self) -> &str {
             &self.name
         }
+
+        pub fn is_empty(&self) -> bool {
+            self.count == 0
+        }
+
+        pub fn reduce_count(&mut self, n: i32) {
+            self.count -= n;
+        }
     }
 
     impl TryInto<TurtSlot> for rocket::serde::json::Value {

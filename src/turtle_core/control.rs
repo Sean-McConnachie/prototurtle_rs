@@ -139,6 +139,10 @@ impl<'a> TurtControl<'a> {
         self.make_req("turtle.placeDown()")
     }
 
+    pub fn print(&self, msg: &str) -> TurtResponse {
+        self.make_req(format!("print(\"{msg}\")").as_str())
+    }
+
     pub fn disconnect(&self) {
         self.next_tx.send("EXIT".to_string()).unwrap();
     }

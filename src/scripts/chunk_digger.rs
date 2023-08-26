@@ -11,19 +11,18 @@ use crate::turtle_core::file_system_storage::{FStore, fstore_load_or_init, fstor
 
 #[derive(Debug, Clone)]
 pub struct ChunkDiggerConfig {
-    pub turtleid: usize,
     pub p1: Pos,
     pub p2: Pos,
     pub place_floor: TurtBlock,
     pub chest_size: usize,
-    pub check_inv_every_n_blocks: usize
+    pub check_inv_every_n_blocks: usize,
 }
 
 #[derive(Debug)]
 struct FStoreChunkDigger {
     fp: PathBuf,
     layer: usize,
-    stack_count: usize
+    stack_count: usize,
 }
 
 impl FStore for FStoreChunkDigger {
@@ -31,7 +30,7 @@ impl FStore for FStoreChunkDigger {
         Self {
             fp: p.clone(),
             layer: 0,
-            stack_count: 0
+            stack_count: 0,
         }
     }
 
@@ -48,21 +47,20 @@ impl FStore for FStoreChunkDigger {
         Self {
             fp: p.clone(),
             layer: lines[0].parse::<usize>().unwrap(),
-            stack_count: lines[1].parse::<usize>().unwrap()
+            stack_count: lines[1].parse::<usize>().unwrap(),
         }
     }
 }
 
 #[derive(Debug)]
 pub struct ChunkDigger<'a> {
-    conf: ChunkDiggerConfig,
-
     _identifier: String,
     _index: usize,
     turt: &'a TurtControl<'a>,
     nav: &'a mut TurtNavigation<'a>,
     inv: TurtInventory<'a>,
 
+    conf: ChunkDiggerConfig,
     fstore_chunk_digger: FStoreChunkDigger,
 }
 
@@ -72,14 +70,12 @@ impl<'a> ChunkDigger<'a> {
             format!("{}/{}.chunkdigger", PROGRESS_DIR, data.0));
         let fstore_chunk_digger = fstore_load_or_init::<FStoreChunkDigger>(&fp);
         Self {
-            conf,
-
             _identifier: data.0,
             _index: data.1,
             turt: data.2,
             nav: data.3,
             inv: TurtInventory::init(&data.2),
-
+            conf,
             fstore_chunk_digger,
         }
     }
@@ -120,6 +116,7 @@ impl<'a> ChunkDigger<'a> {
                 }
             };
             fstore_save(&self.fstore_chunk_digger);
+            self.inv.full_update();
 
             // Return to mining position
             self.nav.goto_head(&saved_pos, Order::XYZ);
@@ -167,6 +164,8 @@ impl<'a> ChunkDigger<'a> {
         let x_diff = p1.x.abs_diff(p2.x) as usize + 1;
         let z_diff = p1.z.abs_diff(p2.z) as usize + 1;
 
+        let mut curr_slot = 0;
+
         for y in self.fstore_chunk_digger.layer..y_diff {
             p.y = p1.y + (y as i64 * 3) + 1;
             for x in 0..x_diff {
@@ -198,6 +197,29 @@ impl<'a> ChunkDigger<'a> {
 
                     self.turt.dig_up().unwrap();
                     self.turt.dig_down().unwrap();
+
+                    match &self.conf.place_floor {
+                        TurtBlock::None => (),
+                        TurtBlock::Any => loop {
+                            // Select non-empty slot and place
+                            let slot = self.inv.reduce_count_andor_find_next(curr_slot);
+                            if let Some(s) = slot {
+                                let s = s as usize;
+                                if curr_slot != s {
+                                    curr_slot = s;
+                                    self.turt.inv_select(curr_slot as u8);
+                                }
+                                self.turt.place_down();
+                                break;
+                            } else {
+                                self.turt.print("Out of blocks! Please add more.");
+                                std::thread::sleep(std::time::Duration::from_millis(1000));
+                            }
+                        }
+                        TurtBlock::Some(_block) => {
+                            unimplemented!("ChunkDigger::run: TurtBlock::Some(_block)")
+                        }
+                    }
 
                     if z % self.conf.check_inv_every_n_blocks == 0 {
                         self.inv_check();
