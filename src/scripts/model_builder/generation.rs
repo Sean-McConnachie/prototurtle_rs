@@ -9,6 +9,8 @@ type Node = uint;
 type Cost = uint;
 type Edge = (Node, Node, Cost);
 
+pub const SEED: u64 = 32;
+
 fn euclideanf_xz(a: &CoordXZ, b: &CoordXZ) -> float {
     let dx = a.0 as float - b.0 as float;
     let dy = a.1 as float - b.1 as float;
@@ -72,8 +74,7 @@ pub fn centroids_to_groupings(
 }
 
 pub fn k_means(model_arr: &Vec<Vec<(CoordXZ, Block)>>, dims: (uint, uint, uint), k: usize) -> Vec<Centroid> {
-    // let mut rng = rand::thread_rng();
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = StdRng::seed_from_u64(SEED);
 
     let mut centroids: Vec<Centroid> = (0..k)
         .map(|_| {
@@ -83,34 +84,43 @@ pub fn k_means(model_arr: &Vec<Vec<(CoordXZ, Block)>>, dims: (uint, uint, uint),
         })
         .collect();
 
+    let mut grid_cost = (0..dims.0).map(|_x| (0..dims.2).map(|_z| 0).collect::<Vec<_>>()).collect::<Vec<_>>();
+    for layer in model_arr {
+        for (point, _block) in layer {
+            grid_cost[point.0 as usize][point.1 as usize] += 1;
+        }
+    }
+    let grid_cost = grid_cost;
+
     // K-means
-    const MAX_ITER: usize = 100;
+    const MAX_ITER: usize = 10_000;
     for _i in 0..MAX_ITER {
         let mut centroid_sums: Vec<((usize, usize), usize)> = (0..k)
             .map(|_| ((0, 0), 0))
             .collect();
 
-        for layer in model_arr {
-            for (point, _block) in layer {
+        for x in 0..dims.0 {
+            for z in 0..dims.2 {
+                let num_points = grid_cost[x as usize][z as usize] as usize;
+
                 let mut min_distance = float::MAX;
                 let mut closest_cluster = 0;
-
-                for (i, ((x, z), _c)) in centroids.iter().enumerate() {
-                    let distance = euclideanf_xz(&point, &(*x as uint, *z as uint));
+                for (i, ((cx, cz), _c)) in centroids.iter().enumerate() {
+                    let distance = euclideanf_xz(&(*cx, *cz), &(x as uint, z as uint));
                     if distance < min_distance {
                         min_distance = distance;
                         closest_cluster = i;
                     }
                 }
 
-                centroid_sums[closest_cluster].0.0 += point.0 as usize;
-                centroid_sums[closest_cluster].0.1 += point.1 as usize;
-                centroid_sums[closest_cluster].1 += 1;
+                centroid_sums[closest_cluster].0.0 += x as usize * num_points;
+                centroid_sums[closest_cluster].0.1 += z as usize * num_points;
+                centroid_sums[closest_cluster].1 += num_points;
             }
         }
 
         // Update centroids
-        for (i, ((x, z), count)) in centroid_sums.iter_mut().enumerate() {
+        for (i, ((x, z), count)) in centroid_sums.iter().enumerate() {
             if *count == 0 { continue; }
             let centroid = &mut centroids[i];
 
@@ -282,25 +292,142 @@ pub fn join_paths_greedily(
     final_path
 }
 
-pub fn example_generation() {
-    let nodes: Vec<(CoordXZ, Block)> = vec![
-        ((0, 0), 0),
-        ((0, 1), 0),
-        ((0, 2), 0),
-        ((1, 0), 0),
-        ((1, 1), 0),
-        ((1, 2), 0),
-        ((2, 0), 0),
-        ((2, 1), 0),
-        ((2, 2), 0),
-    ];
+pub mod other {
+    use std::fs;
+    use std::io::Write;
+    use rocket::serde::json::serde_json;
+    use serde::{Deserialize, Serialize};
+    use modelutils_rs::{float, model, model2arr};
+    use modelutils_rs::model::{Faces, Model, Points};
+    use modelutils_rs::model2arr::{Block, CoordXZ, uint};
+    use modelutils_rs::vec3::Vec3;
+    use crate::scripts::model_builder::generation::{array_model_to_nodes, centroids_to_groupings, join_paths_greedily, k_means, mst_to_paths, nodes_to_mst};
 
-    let mst = nodes_to_mst(&nodes);
-    println!("{:?}", &mst);
+    pub fn example_generation() -> Vec<(Vec<Vec<(CoordXZ, Block)>>, usize)> {
+        let nodes: Vec<(CoordXZ, Block)> = vec![
+            ((0, 0), 0),
+            ((0, 1), 0),
+            ((0, 2), 0),
+            ((1, 0), 0),
+            ((1, 1), 0),
+            ((1, 2), 0),
+            ((2, 0), 0),
+            ((2, 1), 0),
+            ((2, 2), 0),
+        ];
 
-    let paths = mst_to_paths(mst);
-    println!("{:?}", &paths);
+        let mst = nodes_to_mst(&nodes);
+        println!("{:?}", &mst);
 
-    let joined = join_paths_greedily((0, 0), paths, &nodes);
-    println!("{:?}", &joined);
+        let paths = mst_to_paths(mst);
+        println!("{:?}", &paths);
+
+        let joined = join_paths_greedily((0, 0), paths, &nodes);
+        println!("{:?}", &joined);
+
+        // let nodes = vec![nodes];
+        let dims = (3, 3, 3);
+        let nodes = vec![nodes.clone(), nodes.clone(), nodes.clone()];
+
+        let centroids = k_means(&nodes, dims, 3);
+        println!("{:?}", &centroids);
+
+        let groupings = centroids_to_groupings(nodes, centroids, dims);
+        println!("{:?}", &groupings);
+
+        groupings
+    }
+
+    #[derive(Deserialize, Serialize)]
+    struct B {
+        b: Vec<uint>,
+    }
+
+    #[derive(Deserialize, Serialize)]
+    struct Layer {
+        y: usize,
+        blocks: Vec<B>,
+    }
+
+    #[derive(Deserialize, Serialize)]
+    struct Grouping {
+        layers: Vec<Layer>,
+    }
+
+    #[derive(Deserialize, Serialize)]
+    pub struct CoordsExport {
+        groupings: Vec<Grouping>,
+    }
+
+    impl CoordsExport {
+        fn from_groupings(groupings: Vec<(Vec<Vec<(CoordXZ, Block)>>, usize)>) -> Self {
+            let mut groupings_export = vec![];
+            for (grouping, _count) in groupings {
+                let mut layers = vec![];
+                for (y, layer) in grouping.iter().enumerate() {
+                    let mut blocks = vec![];
+                    for (point, block) in layer {
+                        blocks.push(B { b: vec![point.0, point.1] });
+                    }
+                    layers.push(Layer { y, blocks });
+                }
+                groupings_export.push(Grouping { layers });
+            }
+            Self { groupings: groupings_export }
+        }
+    }
+
+    pub fn groupings_to_arr() {
+        let groupings = example_generation();
+        let coords = CoordsExport::from_groupings(groupings);
+        let coords = serde_json::to_string(&coords).unwrap();
+        fs::File::create("coords.json").unwrap().write_all(coords.as_bytes()).unwrap();
+    }
+
+    const RESOLUTION: float = 100.0;
+    const S: uint = 200;
+    const DIMS: (uint, uint, uint) = (S, S, S);
+    const SCALE_DIMS: (float, float, float) = ((DIMS.0 - 1) as float, (DIMS.1 - 1) as float, (DIMS.2 - 1) as float);
+
+    pub fn load_obj_to_arr(path: &str) {
+        let scale_vec = Vec3::new(SCALE_DIMS.0, SCALE_DIMS.1, SCALE_DIMS.2);
+        let (models, _materials) = modelutils_rs::load_default(path).unwrap();
+
+        let models = models
+            .into_iter()
+            .map(|m| Model::new(
+                Points::from_flat_vec(m.mesh.positions),
+                Faces::from_triangles(m.mesh.indices),
+            ))
+            .collect::<Vec<Model>>();
+
+        for mut model in models.into_iter().skip(0) {
+
+            // Align model to origin
+            let bounds = model.model_dims();
+            model.mv(bounds.0 * Vec3::from_scalar(-1.0));
+
+            // Scale model to fit in 10x10x10 cube
+            let scale = model.scale_for_box(scale_vec.clone());
+            model.scale(Vec3::from_scalar(scale.min_val()));
+
+            // Convert to array
+            let arr3d = model2arr::model_2_arr(
+                model,
+                DIMS,
+                RESOLUTION,
+            );
+
+            let nodes = array_model_to_nodes(arr3d);
+            // let joined = join_paths_greedily((0, 0), paths, &nodes);
+            let centroids = k_means(&nodes, DIMS, 9);
+            let groupings = centroids_to_groupings(nodes, centroids, DIMS);
+            let coords = CoordsExport::from_groupings(groupings);
+            let coords = serde_json::to_string(&coords).unwrap();
+            fs::File::create("coords.json").unwrap().write_all(coords.as_bytes()).unwrap();
+            // Save to json for unity
+
+            break;
+        }
+    }
 }
