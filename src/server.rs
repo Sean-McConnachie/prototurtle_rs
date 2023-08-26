@@ -1,4 +1,4 @@
-use crate::{cmd, entry};
+use crate::turtle_core::data::{TurtRawResponse, TurtResponse};
 
 use rocket::serde::json::Json;
 use rocket::{get, post, routes, State};
@@ -6,20 +6,23 @@ use rocket::{get, post, routes, State};
 use std::thread;
 
 use std::sync::{mpsc, RwLock};
+use crate::entry;
 
 const TURTLE_CAPACITY: usize = 32;
 
-struct WebServerChannels {
+pub type ChannelsClient = (mpsc::Sender<String>, mpsc::Receiver<TurtResponse>);
+
+struct ChannelsServer {
     next_rx: mpsc::Receiver<String>,
-    cmdcomplete_tx: mpsc::Sender<cmd::Resp>,
+    cmdcomplete_tx: mpsc::Sender<TurtResponse>,
 }
 
-unsafe impl Sync for WebServerChannels {}
+unsafe impl Sync for ChannelsServer {}
 
-impl WebServerChannels {
-    fn new() -> (Self, entry::ClientChannels) {
+impl ChannelsServer {
+    fn new() -> (Self, ChannelsClient) {
         let (next_tx, next_rx): (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel();
-        let (cmdcomplete_tx, cmdcomplete_rx): (mpsc::Sender<cmd::Resp>, mpsc::Receiver<cmd::Resp>) =
+        let (cmdcomplete_tx, cmdcomplete_rx): (mpsc::Sender<TurtResponse>, mpsc::Receiver<TurtResponse>) =
             mpsc::channel();
 
         (
@@ -32,35 +35,35 @@ impl WebServerChannels {
     }
 }
 
-impl Default for WebServerChannels {
+impl Default for ChannelsServer {
     fn default() -> Self {
         Self::new().0
     }
 }
 
 struct BotNet {
-    turtles: RwLock<Vec<WebServerChannels>>,
+    turtles: RwLock<Vec<ChannelsServer>>,
 }
 
 impl BotNet {
     fn new() -> Self {
         let mut turtles = Vec::with_capacity(TURTLE_CAPACITY);
         for _ in 0..TURTLE_CAPACITY {
-            turtles.push(WebServerChannels::default());
+            turtles.push(ChannelsServer::default());
         }
         Self {
             turtles: RwLock::new(turtles),
         }
     }
 
-    fn register_turtle(&self, turtleid: usize) -> entry::ClientChannels {
+    fn register_turtle(&self, turtleid: usize) -> ChannelsClient {
         let mut turts = self.turtles.write().unwrap();
         if turtleid > turts.len() {
             for _ in turts.len()..turtleid + 1 {
-                turts.push(WebServerChannels::default());
+                turts.push(ChannelsServer::default());
             }
         }
-        let (web_server_channels, client_channels) = WebServerChannels::new();
+        let (web_server_channels, client_channels) = ChannelsServer::new();
         turts[turtleid] = web_server_channels;
         client_channels
     }
@@ -69,8 +72,10 @@ impl BotNet {
 #[post("/<turtleid>")]
 async fn register(bot_net: &State<BotNet>, turtleid: usize) {
     println!("Turtle {turtleid} is trying to register!");
-    let client_channels = bot_net.register_turtle(turtleid);
-    thread::spawn(move || entry::entry_point(turtleid, client_channels));
+    let channels_client = bot_net.register_turtle(turtleid);
+    thread::spawn(move || {
+        entry::turtle_registered(turtleid.to_string(), channels_client)
+    });
 }
 
 #[get("/<turtleid>")]
@@ -82,9 +87,9 @@ async fn next(bot_net: &State<BotNet>, turtleid: usize) -> String {
 }
 
 #[post("/<turtleid>", format = "json", data = "<body>")]
-async fn cmdcomplete(bot_net: &State<BotNet>, turtleid: usize, body: Json<cmd::LuaResp>) {
-    let lua_resp = body.into_inner();
-    let resp: cmd::Resp = lua_resp.into();
+async fn cmdcomplete(bot_net: &State<BotNet>, turtleid: usize, body: Json<TurtRawResponse>) {
+    let raw_resp = body.into_inner();
+    let resp: TurtResponse = raw_resp.into();
 
     match bot_net.turtles.read().unwrap()[turtleid]
         .cmdcomplete_tx
