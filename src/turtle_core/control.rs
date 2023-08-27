@@ -22,7 +22,7 @@ impl<'a> TurtControl<'a> {
         }
     }
 
-    fn make_req_t<T>(&self, cmd: &str) -> Result<T, <T as TryFrom<TurtResponse>>::Error>
+    pub fn make_req_t<T>(&self, cmd: &str) -> Result<T, <T as TryFrom<TurtResponse>>::Error>
         where
             T: TryFrom<TurtResponse>,
     {
@@ -31,7 +31,7 @@ impl<'a> TurtControl<'a> {
         T::try_from(resp)
     }
 
-    fn make_req(&self, cmd: &str) -> TurtResponse {
+    pub fn make_req(&self, cmd: &str) -> TurtResponse {
         self.next_tx.send(cmd.to_string()).unwrap();
         self.cmdcomplete_rx.recv().unwrap()
     }

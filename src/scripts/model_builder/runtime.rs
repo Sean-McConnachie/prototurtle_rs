@@ -4,6 +4,7 @@ use modelutils_rs::model2arr::{Block, CoordXZ, uint};
 use crate::{DefaultData, PROGRESS_DIR, TurtleIdentifier};
 use crate::scripts::model_builder::generation::{join_paths_greedily, mst_to_paths, nodes_to_mst};
 use crate::turtle_core::control::TurtControl;
+use crate::turtle_core::data::TurtResponse;
 use crate::turtle_core::file_system_storage::{FStore, fstore_load_or_init, fstore_save};
 use crate::turtle_core::inventory::{TURT_SLOTS, TurtInventory};
 use crate::turtle_core::navigation::{Pos, PosH, TurtNavigation};
@@ -12,7 +13,6 @@ use crate::turtle_core::navigation::{Pos, PosH, TurtNavigation};
 struct FStoreModelBuilder {
     fp: PathBuf,
     start_layer: usize,
-    stack_count: usize,
 }
 
 impl FStore for FStoreModelBuilder {
@@ -20,7 +20,6 @@ impl FStore for FStoreModelBuilder {
         Self {
             fp: p.clone(),
             start_layer: 0,
-            stack_count: 0,
         }
     }
 
@@ -29,7 +28,7 @@ impl FStore for FStoreModelBuilder {
     }
 
     fn save(&self) -> String {
-        format!("{}\n{}\n", self.start_layer, self.stack_count)
+        format!("{}\n", self.start_layer)
     }
 
     fn load(p: &PathBuf, d: &str) -> Self {
@@ -37,7 +36,6 @@ impl FStore for FStoreModelBuilder {
         Self {
             fp: p.clone(),
             start_layer: lines[0].parse::<usize>().unwrap(),
-            stack_count: lines[1].parse::<usize>().unwrap(),
         }
     }
 }
@@ -45,12 +43,13 @@ impl FStore for FStoreModelBuilder {
 #[derive(Debug, Clone)]
 pub struct ModelBuilderConfig {
     pub start_pos: Pos,
-    pub chest_slots: usize,
+    pub max_chests: usize,
+    pub allowed_blocks: Vec<String>,
 }
 
 #[derive(Debug)]
 pub struct ModelBuilder<'a> {
-    _identifier: TurtleIdentifier,
+    identifier: TurtleIdentifier,
     index: usize,
     turt: &'a TurtControl<'a>,
     nav: &'a mut TurtNavigation<'a>,
@@ -68,7 +67,7 @@ impl<'a> ModelBuilder<'a> {
             format!("{}/{}.modelbuilder", PROGRESS_DIR, data.0));
         let fstore_model_builder = fstore_load_or_init::<FStoreModelBuilder>(&fp);
         Self {
-            _identifier: data.0,
+            identifier: data.0,
             index: data.1,
             turt: data.2,
             nav: data.3,
@@ -82,60 +81,78 @@ impl<'a> ModelBuilder<'a> {
         fstore_save(&self.fstore_model_builder)
     }
 
-    pub fn inv_update(&mut self, blocks_placed: usize) {
-        if blocks_placed % 64 == 0 {
-            let slot = (blocks_placed / 64) % 16;
-            if slot == 0 {
-                let chest_size = self.conf.chest_slots;
-
-                // Save position of turtle (to return to)
-                let saved_pos = self.nav.pos().clone();
-                // Calculate offset from starting position
-                let offset = (self.fstore_model_builder.stack_count) / chest_size;
-                // Calculate number of slots to place in chest
-                let max_chest_space = chest_size - ((self.fstore_model_builder.stack_count) % chest_size);
-                // Increment number of slots mined
-                self.fstore_model_builder.stack_count += TURT_SLOTS;
-
-                // Calculate first chest location and go there
-                let mut chest_loc: PosH = self.conf.start_pos.clone().into();
-                chest_loc.x += self.index as i64;
-                chest_loc.z -= offset as i64;
-
-                // Go to lowest y-level first
-                let mut next_pos = saved_pos.clone();
-                next_pos.y = self.conf.start_pos.y;
-                self.nav.goto_head(&next_pos, Order::XYZ);
-                next_pos.x = chest_loc.x;
-                self.nav.goto_head(&next_pos, Order::XYZ);
-
-                self.nav.goto_head(&chest_loc, Order::XYZ);
-
-                // Place items in chest
-                for _ in 0..max_chest_space.min(TURT_SLOTS) as usize {
-                    self.turt.suck_down();
+    fn clear_inv(&mut self) {
+        for s in 0..TURT_SLOTS {
+            if let Some(block) = self.turt.inv_item_detail(s as u8) {
+                if !self.conf.allowed_blocks.contains(&block.name().to_string()) {
+                    self.turt.inv_select(s as u8);
+                    self.turt.inv_drop_forw();
                 }
-                // Check if chest didn't have enough slots for all items
-                if max_chest_space < TURT_SLOTS {
-                    // Repeat
-                    chest_loc.z -= 1;
-                    self.nav.goto_head(&chest_loc, Order::XYZ);
-
-                    for _ in max_chest_space..TURT_SLOTS {
-                        self.turt.suck_down();
-                    }
-                };
-                fstore_save(&self.fstore_model_builder);
-
-                next_pos.x = saved_pos.x;
-                self.nav.goto_head(&next_pos, Order::XYZ);
-
-                // Return to mining position
-                self.nav.goto_head(&saved_pos, Order::XYZ);
             }
-            self.turt.inv_select((slot as u8) % 16);
         }
+        self.inv.full_update();
     }
+
+    pub fn inv_update(&mut self, curr_slot: &mut u8) {
+        if let Some(next_slot) = self.inv.reduce_count_andor_find_next(*curr_slot as usize) {
+            *curr_slot = next_slot as u8;
+            self.turt.inv_select(*curr_slot);
+            return;
+        }
+        println!("Inventory empty! Refilling... [{}]", self.identifier);
+        self.clear_inv();
+
+        // Save position of turtle (to return to)
+        let saved_pos = self.nav.pos().clone();
+
+        // Calculate first chest location and go there
+        let mut chest_loc: PosH = self.conf.start_pos.clone().into();
+        chest_loc.x += self.index as i64;
+
+        // Go to lowest y-level first and then to chest
+        let mut next_pos = saved_pos.clone();
+        next_pos.y = self.conf.start_pos.y;
+        self.nav.goto_head(&next_pos, Order::XYZ);
+        next_pos.x = chest_loc.x;
+        self.nav.goto_head(&next_pos, Order::XYZ);
+        self.nav.goto_head(&chest_loc, Order::XYZ);
+
+        // Refill inventory
+        let mut first = true;
+        while !self.inv.is_full() {
+            if !first {
+                println!("Waiting for chest to refill... [{}]", self.identifier);
+                std::thread::sleep(std::time::Duration::from_millis(10000));
+            }
+            first = false;
+            let mut offset = 0;
+            for _s in 0..TURT_SLOTS {
+                let r = self.turt.suck_down();
+                let success = match r {
+                    TurtResponse::Ok(r) => {
+                        r.as_array().unwrap()[0].as_bool().unwrap()
+                    }
+                    _ => false
+                };
+                if !success {
+                    offset += 1;
+                    offset %= self.conf.max_chests;
+                    chest_loc.z = self.conf.start_pos.z - offset as i64;
+                    self.nav.goto_head(&chest_loc, Order::XYZ);
+                    continue;
+                }
+                self.clear_inv();
+            }
+        }
+
+        // Go underneath building point
+        next_pos.x = saved_pos.x;
+        self.nav.goto_head(&next_pos, Order::XYZ);
+
+        // Return to mining position
+        self.nav.goto_head(&saved_pos, Order::XYZ);
+    }
+
 
     fn curr_xz(&self) -> CoordXZ {
         let p = self.nav.pos();
@@ -193,7 +210,6 @@ impl<'a> ModelBuilder<'a> {
         //     self.turt.place_down();
         // }
 
-
         fn world_coord(start: &Pos, coord: CoordXZ, y: usize) -> Pos {
             Pos {
                 x: start.x + coord.0 as i64,
@@ -202,10 +218,11 @@ impl<'a> ModelBuilder<'a> {
             }
         }
 
-        let mut blocks_placed = 0;
+        let mut curr_slot: u8 = 0;
 
-        for y in (self.fstore_model_builder.start_layer..nodes.len()).rev() {
-            let layer = &nodes[y];
+        for y in self.fstore_model_builder.start_layer..nodes.len() {
+            let rev_y = nodes.len() - y - 1;
+            let layer = &nodes[rev_y];
             if layer.is_empty() { continue; }
 
             self.fstore_model_builder.start_layer = y;
@@ -216,13 +233,12 @@ impl<'a> ModelBuilder<'a> {
             let path = join_paths_greedily(self.curr_xz(), paths, &layer);
 
             for node in path {
-                self.inv_update(blocks_placed);
+                self.inv_update(&mut curr_slot);
 
                 let (coord, _block) = layer[node as usize];
-                self.nav.goto_nohead(&world_coord(&self.conf.start_pos, coord, y), Order::XYZ);
+                self.nav.goto_nohead(&world_coord(&self.conf.start_pos, coord, rev_y), Order::XYZ);
 
                 self.turt.place_up();
-                blocks_placed += 1;
             }
         }
     }

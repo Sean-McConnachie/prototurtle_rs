@@ -1,6 +1,6 @@
 use modelutils_rs::{DEG2RAD, float};
 use modelutils_rs::coords::Order;
-use modelutils_rs::model2arr::{ArrayModel, Block, CoordXZ, model_2_arr, uint};
+use modelutils_rs::model2arr::{Block, CoordXZ, model_2_arr, uint};
 use modelutils_rs::model::{Faces, Model, Points};
 use modelutils_rs::vec3::Vec3;
 use crate::scripts::model_builder::generation::{array_model_to_nodes, centroids_to_groupings, k_means};
@@ -8,7 +8,7 @@ use crate::scripts::model_builder::runtime::{ModelBuilder, ModelBuilderConfig};
 use crate::server::ChannelsClient;
 use crate::turtle_core::control::TurtControl;
 use crate::turtle_core::navigation::{Head, Pos, PosH, TurtNavigation};
-use crate::{DefaultData, TurtleIdentifier};
+use crate::TurtleIdentifier;
 
 const PATH: &str = "assets/octo.obj";
 const ACTIVE_TURTLES: &[usize] = &[
@@ -17,7 +17,6 @@ const ACTIVE_TURTLES: &[usize] = &[
     10,
     11,
     12,
-    18,
     19,
     20,
     21
@@ -98,11 +97,9 @@ pub fn turtle_registered(identifier: TurtleIdentifier, channels_client: Channels
 
     let ind = id_to_i(identifier);
 
+
     nav.gps_init();
     println!("Turtle {} registered! {}", identifier, nav);
-
-    let groupings = get_model(PATH);
-    let groupings = &groupings[ind];
 
     let mut model_builder = ModelBuilder::new(
         (
@@ -112,9 +109,30 @@ pub fn turtle_registered(identifier: TurtleIdentifier, channels_client: Channels
             &mut nav
         ), ModelBuilderConfig {
             start_pos: Pos::new(START_POS.x, START_POS.y, START_POS.z),
-            chest_slots: 64,
+            max_chests: 7,
+            allowed_blocks: vec![
+                "minecraft:yellow_terracotta".to_string(),
+                "minecraft:pink_terracotta".to_string(),
+                "minecraft:orange_terracotta".to_string(),
+                "minecraft:light_blue_terracotta".to_string(),
+                "minecraft:lime_terracotta".to_string(),
+                "minecraft:blue_terracotta".to_string(),
+                "minecraft:white_terracotta".to_string(),
+                "minecraft:magenta_terracotta".to_string(),
+                "minecraft:terracotta".to_string(),
+                "minecraft:purple_terracotta".to_string(),
+                "minecraft:black_terracotta".to_string(),
+                "minecraft:green_terracotta".to_string(),
+                "minecraft:gray_terracotta".to_string(),
+                "minecraft:brown_terracotta".to_string(),
+                "minecraft:cyan_terracotta".to_string(),
+                "minecraft:red_terracotta".to_string(),
+                "minecraft:light_gray_terracotta".to_string(),
+            ],
         });
 
+    let groupings = get_model(PATH);
+    let groupings = &groupings[ind];
     model_builder.run(&groupings.0, groupings.1);
 
     turt.disconnect();

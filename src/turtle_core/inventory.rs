@@ -46,7 +46,7 @@ impl<'a> TurtInventory<'a> {
             if let Some(s) = &mut self.slots[slot] {
                 if s.count() > 0 {
                     s.reduce_count(1);
-                    return Some(s.count());
+                    return Some(slot as i32);
                 } else if s.count() == 0 {
                     if !ignore {
                         self.slots[slot] = None;

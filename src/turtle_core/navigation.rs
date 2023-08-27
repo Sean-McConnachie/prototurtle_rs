@@ -78,6 +78,7 @@ mod heading {
 }
 
 mod position {
+    use crate::turtle_core::data::TurtResponse;
     use super::heading::Head;
 
     #[derive(Debug, Clone)]
