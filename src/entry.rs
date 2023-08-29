@@ -3,12 +3,89 @@ use modelutils_rs::coords::Order;
 use modelutils_rs::model2arr::{Block, CoordXZ, model_2_arr, uint};
 use modelutils_rs::model::{Faces, Model, Points};
 use modelutils_rs::vec3::Vec3;
+use crate::scripts::chunk_digger::{ChunkDigger, ChunkDiggerConfig};
 use crate::scripts::model_builder::generation::{array_model_to_nodes, centroids_to_groupings, k_means};
 use crate::scripts::model_builder::runtime::{ModelBuilder, ModelBuilderConfig};
 use crate::server::ChannelsClient;
 use crate::turtle_core::control::TurtControl;
+use crate::turtle_core::inventory::TurtBlock;
 use crate::turtle_core::navigation::{Head, Pos, PosH, TurtNavigation};
-use crate::TurtleIdentifier;
+use crate::{TurtleIdentifier, TurtleIndex};
+
+// const PATH: &str = "assets/octo.obj";
+// const ACTIVE_TURTLES: &[usize] = &[
+//     4,
+//     9,
+//     10,
+//     11,
+//     12,
+//     19,
+//     20,
+//     21
+// ];
+// const START_POS: PosH = PosH {
+//     x: -1524,
+//     y: 63,
+//     z: -459,
+//     h: Head::N,
+// };
+// const DEPTH: i64 = 64;
+// const WIDTH: i64 = 64 / 8;
+// const HEIGHT: i64 = 108 - 63;
+//
+// fn id_to_i(turtleid: usize) -> usize {
+//     let mut v = None;
+//     for (i, t_id) in ACTIVE_TURTLES.iter().enumerate() {
+//         if t_id == &turtleid {
+//             v = Some(i);
+//             break;
+//         }
+//     }
+//     match v {
+//         Some(v) => v,
+//         None => panic!("Rip."),
+//     }
+// }
+//
+//
+// pub fn turtle_registered(identifier: TurtleIdentifier, channels_client: ChannelsClient) {
+//     let turt = TurtControl::new(
+//         channels_client.0.clone(),
+//         &channels_client.1);
+//     let mut nav = TurtNavigation::new(
+//         identifier,
+//         &turt,
+//         true,
+//         channels_client.0.clone(),
+//         &channels_client.1);
+//
+//     let ind = id_to_i(identifier) as i64;
+//
+//     println!("[pre] Turtle {} registered! {}", identifier, nav);
+//
+//     nav.gps_init();
+//     println!("Turtle {} registered! {}", identifier, nav);
+//
+//     let conf = ChunkDiggerConfig {
+//         p1: Pos::new(START_POS.x + ind * WIDTH, START_POS.y, START_POS.z - DEPTH),
+//         p2: Pos::new(START_POS.x + (ind + 1) * WIDTH, START_POS.y + HEIGHT, START_POS.z - DEPTH),
+//         place_floor: TurtBlock::None,
+//         chest_size: 54, // iron chest
+//         check_inv_every_n_blocks: 64,
+//     };
+//     let mut digger = ChunkDigger::init(
+//         (
+//             identifier,
+//             ind as TurtleIndex,
+//             &turt,
+//             &mut nav
+//         ), conf);
+//     digger.run();
+//
+//     turt.disconnect();
+// }
+//
+
 
 const PATH: &str = "assets/octo.obj";
 const ACTIVE_TURTLES: &[usize] = &[

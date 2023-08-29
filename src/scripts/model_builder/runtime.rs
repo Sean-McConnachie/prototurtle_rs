@@ -160,55 +160,55 @@ impl<'a> ModelBuilder<'a> {
     }
 
     pub fn run(&mut self, nodes: &Vec<Vec<(CoordXZ, Block)>>, count: usize) {
-        // let num_chests = (count as f32 / 64.0 / self.conf.chest_slots as f32).ceil() as usize;
-        // let mut need_more_chests = match self.turt.inv_item_detail(0) {
-        //     Some(chests) => {
-        //         if chests.count() < num_chests as i32 {
-        //             true
-        //         } else {
-        //             false
-        //         }
-        //     }
-        //     None => true,
-        // };
-        //
-        // if !self.fstore_model_builder.start_layer == 0 {
-        //     need_more_chests = true;
-        // } else {
-        //     need_more_chests = false;
-        // }
-        //
-        // if need_more_chests {
-        //     println!("Not enough chests! Need at least: {}", num_chests);
-        //     std::thread::sleep(std::time::Duration::from_millis(10000));
-        //     return;
-        // }
-        //
-        // for i in 0..num_chests {
-        //     self.nav.goto_nohead(&Pos::new(
-        //         self.conf.start_pos.x + self.index as i64,
-        //         self.conf.start_pos.y,
-        //         self.conf.start_pos.z - i as i64,
-        //     ), Order::XYZ);
-        //     self.inv.full_update();
-        //     match self.inv.slots[0] {
-        //         Some(ref mut chest) => {
-        //             if chest.name() != "minecraft:chest" {
-        //                 println!("Slot 0 is not a chest!");
-        //                 std::thread::sleep(std::time::Duration::from_millis(10000));
-        //                 return;
-        //             }
-        //         }
-        //         None => {
-        //             println!("No chest in slot 0!");
-        //             std::thread::sleep(std::time::Duration::from_millis(10000));
-        //             return;
-        //         }
-        //     }
-        //     self.turt.inv_select(0);
-        //     self.turt.dig_down();
-        //     self.turt.place_down();
-        // }
+        let num_chests = (count as f32 / 64.0 / self.conf.chest_slots as f32).ceil() as usize;
+        let mut need_more_chests = match self.turt.inv_item_detail(0) {
+            Some(chests) => {
+                if chests.count() < num_chests as i32 {
+                    true
+                } else {
+                    false
+                }
+            }
+            None => true,
+        };
+
+        if !self.fstore_model_builder.start_layer == 0 {
+            need_more_chests = true;
+        } else {
+            need_more_chests = false;
+        }
+
+        if need_more_chests {
+            println!("Not enough chests! Need at least: {}", num_chests);
+            std::thread::sleep(std::time::Duration::from_millis(10000));
+            return;
+        }
+
+        for i in 0..num_chests {
+            self.nav.goto_nohead(&Pos::new(
+                self.conf.start_pos.x + self.index as i64,
+                self.conf.start_pos.y,
+                self.conf.start_pos.z - i as i64,
+            ), Order::XYZ);
+            self.inv.full_update();
+            match self.inv.slots[0] {
+                Some(ref mut chest) => {
+                    if chest.name() != "minecraft:chest" {
+                        println!("Slot 0 is not a chest!");
+                        std::thread::sleep(std::time::Duration::from_millis(10000));
+                        return;
+                    }
+                }
+                None => {
+                    println!("No chest in slot 0!");
+                    std::thread::sleep(std::time::Duration::from_millis(10000));
+                    return;
+                }
+            }
+            self.turt.inv_select(0);
+            self.turt.dig_down();
+            self.turt.place_down();
+        }
 
         fn world_coord(start: &Pos, coord: CoordXZ, y: usize) -> Pos {
             Pos {
